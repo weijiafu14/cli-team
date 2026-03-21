@@ -1393,6 +1393,10 @@ export class AionUIDatabase {
     this.db.exec('VACUUM');
     console.log('[Database] Vacuum completed');
   }
+
+  runInTransaction<T>(callback: () => T): T {
+    return this.db.transaction(callback)();
+  }
 }
 
 // Export singleton instance

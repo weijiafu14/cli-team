@@ -1,0 +1,65 @@
+/**
+ * @license
+ * Copyright 2025 AionUi (aionui.com)
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
+import type {
+  IAgentTeamMember,
+  TChatConversation,
+  TProviderWithModel,
+  AgentTeamDefaultView,
+  AgentTeamDispatchPolicy,
+} from '@/common/storage';
+import type { AcpBackendAll } from '@/types/acpTypes';
+
+export interface ICoordTimelineEntry {
+  id: string;
+  ts: string;
+  from: string;
+  role: 'system' | 'user' | 'agent';
+  type: string;
+  summary: string;
+  body?: string;
+  topic?: string;
+  task_id?: string;
+}
+
+export interface IAgentTeamMemberInput {
+  type: 'acp' | 'gemini';
+  name: string;
+  backend?: AcpBackendAll;
+  cliPath?: string;
+  customAgentId?: string;
+  presetAssistantId?: string;
+  enabledSkills?: string[];
+  sessionMode?: string;
+  currentModelId?: string;
+  model?: TProviderWithModel;
+}
+
+export interface ICreateAgentTeamInput {
+  name?: string;
+  workspace?: string;
+  customWorkspace?: boolean;
+  dispatchPolicy?: AgentTeamDispatchPolicy;
+  defaultView?: AgentTeamDefaultView;
+  members: IAgentTeamMemberInput[];
+  initialMessage?: string;
+}
+
+export interface IAgentTeamCreateResult {
+  teamConversation: Extract<TChatConversation, { type: 'agent-team' }>;
+  memberConversations: TChatConversation[];
+}
+
+export interface IAgentTeamSendMessageInput {
+  conversationId: string;
+  input: string;
+  msgId?: string;
+}
+
+export interface IResolvedAgentTeam {
+  teamConversation: Extract<TChatConversation, { type: 'agent-team' }>;
+  members: IAgentTeamMember[];
+}

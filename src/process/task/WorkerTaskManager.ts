@@ -30,7 +30,12 @@ export class WorkerTaskManager implements IWorkerTaskManager {
     }
 
     const conversation = this.repo.getConversation(id);
-    if (conversation) return this._buildAndCache(conversation, options);
+    if (conversation) {
+      if (conversation.type === 'agent-team') {
+        return Promise.reject(new Error(`Conversation ${id} is an agent-team shell and cannot build a runtime task`));
+      }
+      return this._buildAndCache(conversation, options);
+    }
 
     return Promise.reject(new Error(`Conversation not found: ${id}`));
   }

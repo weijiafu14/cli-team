@@ -8,6 +8,7 @@ import type { CodexAgentManager } from '@/agent/codex';
 import { GeminiAgent, GeminiApprovalStore } from '@/agent/gemini';
 import type { TChatConversation } from '@/common/storage';
 import type { IAgentManager } from '@process/task/IAgentManager';
+import type { AgentTeamService } from '@process/services/agentTeam';
 import type { IConversationService } from '@process/services/IConversationService';
 import type { IWorkerTaskManager } from '@process/task/IWorkerTaskManager';
 import { ipcBridge } from '../../common';
@@ -31,7 +32,8 @@ const refreshTrayMenuSafely = async (): Promise<void> => {
 
 export function initConversationBridge(
   conversationService: IConversationService,
-  workerTaskManager: IWorkerTaskManager
+  workerTaskManager: IWorkerTaskManager,
+  agentTeamService: AgentTeamService
 ): void {
   const emitConversationListChanged = (
     conversation: Pick<TChatConversation, 'id' | 'source'>,
@@ -164,7 +166,9 @@ export function initConversationBridge(
   ipcBridge.conversation.createWithConversation.provider(
     async ({ conversation, sourceConversationId, migrateCron }) => {
       try {
-        void workerTaskManager.getOrBuildTask(conversation.id);
+        if (conversation.type !== 'agent-team') {
+          void workerTaskManager.getOrBuildTask(conversation.id);
+        }
 
         const result = await conversationService.createWithMigration({
           conversation,
@@ -189,9 +193,12 @@ export function initConversationBridge(
       // Get conversation source before deletion (for channel cleanup)
       const conversation = await conversationService.getConversation(id);
       const source = conversation?.source;
+      const teamMembers = conversation?.type === 'agent-team' ? await agentTeamService.getMembers(id) : [];
 
       // Kill the running task if exists
-      workerTaskManager.kill(id);
+      if (conversation?.type !== 'agent-team') {
+        workerTaskManager.kill(id);
+      }
 
       // If source is not 'aionui' (e.g., telegram), cleanup channel resources
       // 如果来源不是 aionui（如 telegram），需要清理 channel 相关资源
@@ -209,9 +216,14 @@ export function initConversationBridge(
         }
       }
 
-      await conversationService.deleteConversation(id);
+      if (conversation?.type === 'agent-team') {
+        await agentTeamService.deleteTeam(id);
+      } else {
+        await conversationService.deleteConversation(id);
+      }
       if (conversation) {
         emitConversationListChanged(conversation, 'deleted');
+        teamMembers.forEach((member) => emitConversationListChanged(member, 'deleted'));
       }
       await refreshTrayMenuSafely();
       return true;
@@ -365,6 +377,21 @@ export function initConversationBridge(
   // 通用 sendMessage 实现 - 统一调用 IAgentManager.sendMessage
   // Generic sendMessage - dispatches via IAgentManager.sendMessage interface
   ipcBridge.conversation.sendMessage.provider(async ({ conversation_id, files, ...other }) => {
+    const conversation = await conversationService.getConversation(conversation_id);
+    if (conversation?.type === 'agent-team') {
+      try {
+        const entry = await agentTeamService.sendMessage({
+          conversationId: conversation_id,
+          input: other.input,
+          msgId: other.msg_id,
+        });
+        ipcBridge.agentTeam.timelineStream.emit({ conversation_id, entry });
+        return { success: true };
+      } catch (error) {
+        return { success: false, msg: error instanceof Error ? error.message : String(error) };
+      }
+    }
+
     let task: IAgentManager | undefined;
     try {
       task = await workerTaskManager.getOrBuildTask(conversation_id);

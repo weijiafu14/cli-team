@@ -42,6 +42,7 @@ const AGENT_LOGO_MAP = {
   qwen: QwenLogo,
   iflow: IflowLogo,
   codex: CodexLogo,
+  'agent-team': AuggieLogo,
   codebuddy: CodeBuddyLogo,
   droid: DroidLogo,
   goose: GooseLogo,

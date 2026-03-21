@@ -63,6 +63,9 @@ export const appendWorkspaceFilesToZip = (
 };
 
 export const getBackendKeyFromConversation = (conversation: TChatConversation): string | undefined => {
+  if (conversation.type === 'agent-team') {
+    return 'agent-team';
+  }
   if (conversation.type === 'acp') {
     return conversation.extra?.backend;
   }

@@ -41,6 +41,9 @@ const mapStatusToState = (
 };
 
 const resolveAgentIdentity = (conversation: TChatConversation): { backend: string; agentName: string } => {
+  if (conversation.type === 'agent-team') {
+    return { backend: 'agent-team', agentName: 'Agent Team' };
+  }
   if (conversation.type === 'acp') {
     const backend = String(conversation.extra?.backend || 'acp');
     const agentName = String(conversation.extra?.agentName || backend);
@@ -104,7 +107,9 @@ export class ActivitySnapshotBuilder {
   build(): IExtensionAgentActivitySnapshot {
     const conversations = this.repo
       .getUserConversations(undefined, 0, 10000)
-      .data.filter((conv) => !conv.extra?.isHealthCheck);
+      .data.filter(
+        (conv) => conv.type !== 'agent-team' && !(conv.extra as Record<string, unknown>)?.isHealthCheck
+      );
 
     const byAgent = new Map<string, IExtensionAgentActivityItem>();
     let runningConversations = 0;
