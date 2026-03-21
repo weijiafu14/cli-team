@@ -8,6 +8,7 @@ import { logger } from '@office-ai/platform';
 import { initAllBridges } from './bridge';
 import { SqliteChannelRepository } from '@process/database/SqliteChannelRepository';
 import { SqliteConversationRepository } from '@process/database/SqliteConversationRepository';
+import { AgentTeamService } from '@process/services/agentTeam';
 import { ConversationServiceImpl } from '@process/services/ConversationServiceImpl';
 import { cronService } from '@process/services/cron/cronServiceSingleton';
 import { workerTaskManager } from '@process/task/workerTaskManagerSingleton';
@@ -17,6 +18,7 @@ logger.config({ print: true });
 const repo = new SqliteConversationRepository();
 const conversationServiceImpl = new ConversationServiceImpl(repo);
 const channelRepo = new SqliteChannelRepository();
+const agentTeamService = new AgentTeamService(repo, conversationServiceImpl, workerTaskManager);
 
 // 初始化所有IPC桥接
 initAllBridges({
@@ -24,7 +26,10 @@ initAllBridges({
   conversationRepo: repo,
   workerTaskManager,
   channelRepo,
+  agentTeamService,
 });
+
+agentTeamService.resumeAllTeams();
 
 // Initialize cron service (load jobs from database and start timers)
 void cronService.init().catch((error) => {

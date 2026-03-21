@@ -160,6 +160,9 @@ export class ConversationServiceImpl implements IConversationService {
         conversation = await createNanobotAgent(params as any);
         break;
       }
+      case 'agent-team': {
+        throw new Error('agent-team conversations must be created via AgentTeamService');
+      }
       default: {
         throw new Error(`Invalid conversation type: ${(params as any).type}`);
       }

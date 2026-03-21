@@ -7,9 +7,11 @@
 import { acpDetector } from '@/agent/acp/AcpDetector';
 import type { IChannelRepository } from '@process/database/IChannelRepository';
 import type { IConversationRepository } from '@process/database/IConversationRepository';
+import type { AgentTeamService } from '@process/services/agentTeam';
 import type { IConversationService } from '@process/services/IConversationService';
 import type { IWorkerTaskManager } from '@process/task/IWorkerTaskManager';
 import { initAcpConversationBridge } from './acpConversationBridge';
+import { initAgentTeamBridge } from './agentTeamBridge';
 import { initApplicationBridge } from './applicationBridge';
 import { initAuthBridge } from './authBridge';
 import { initBedrockBridge } from './bedrockBridge';
@@ -41,6 +43,7 @@ export interface BridgeDependencies {
   conversationRepo: IConversationRepository;
   workerTaskManager: IWorkerTaskManager;
   channelRepo: IChannelRepository;
+  agentTeamService: AgentTeamService;
 }
 
 /**
@@ -51,7 +54,9 @@ export function initAllBridges(deps: BridgeDependencies): void {
   initShellBridge();
   initFsBridge();
   initFileWatchBridge();
-  initConversationBridge(deps.conversationService, deps.workerTaskManager);
+  initConversationBridge(deps.conversationService, deps.workerTaskManager, deps.agentTeamService);
+  initAgentTeamBridge(deps.agentTeamService);
+  deps.agentTeamService.resumeAllTeams();
   initApplicationBridge(deps.workerTaskManager);
   initGeminiConversationBridge(deps.workerTaskManager);
   // 额外的 Gemini 辅助桥（订阅检测等）需要在对话桥初始化后可用 / extra helpers after core bridges
@@ -91,6 +96,7 @@ export async function initializeAcpDetector(): Promise<void> {
 
 export {
   initAcpConversationBridge,
+  initAgentTeamBridge,
   initApplicationBridge,
   initAuthBridge,
   initBedrockBridge,

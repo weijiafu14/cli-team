@@ -900,13 +900,57 @@ const migration_v15: IMigration = {
 };
 
 /**
+ * Migration v15 -> v16: Add agent-team conversation type
+ */
+const migration_v16: IMigration = {
+  version: 16,
+  name: 'Add agent-team conversation type',
+  up: (db) => {
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS conversations_new (
+        id TEXT PRIMARY KEY,
+        user_id TEXT NOT NULL,
+        name TEXT NOT NULL,
+        type TEXT NOT NULL CHECK(type IN ('gemini', 'acp', 'codex', 'openclaw-gateway', 'nanobot', 'agent-team')),
+        extra TEXT NOT NULL,
+        model TEXT,
+        status TEXT CHECK(status IN ('pending', 'running', 'finished')),
+        source TEXT,
+        channel_chat_id TEXT,
+        created_at INTEGER NOT NULL,
+        updated_at INTEGER NOT NULL,
+        FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+      );
+
+      INSERT INTO conversations_new (id, user_id, name, type, extra, model, status, source, channel_chat_id, created_at, updated_at)
+      SELECT id, user_id, name, type, extra, model, status, source, channel_chat_id, created_at, updated_at FROM conversations;
+
+      DROP TABLE conversations;
+      ALTER TABLE conversations_new RENAME TO conversations;
+
+      CREATE INDEX IF NOT EXISTS idx_conversations_user_id ON conversations(user_id);
+      CREATE INDEX IF NOT EXISTS idx_conversations_updated_at ON conversations(updated_at);
+      CREATE INDEX IF NOT EXISTS idx_conversations_type ON conversations(type);
+      CREATE INDEX IF NOT EXISTS idx_conversations_user_updated ON conversations(user_id, updated_at DESC);
+      CREATE INDEX IF NOT EXISTS idx_conversations_source ON conversations(source);
+      CREATE INDEX IF NOT EXISTS idx_conversations_source_updated ON conversations(source, updated_at DESC);
+      CREATE INDEX IF NOT EXISTS idx_conversations_source_chat ON conversations(source, channel_chat_id, updated_at DESC);
+    `);
+    console.log('[Migration v16] Added agent-team conversation type');
+  },
+  down: (db) => {
+    console.warn('[Migration v16] Rollback skipped to prevent data loss of agent-team conversations.');
+  },
+};
+
+/**
  * All migrations in order
  */
 // prettier-ignore
 export const ALL_MIGRATIONS: IMigration[] = [
   migration_v1, migration_v2, migration_v3, migration_v4, migration_v5, migration_v6,
   migration_v7, migration_v8, migration_v9, migration_v10, migration_v11, migration_v12,
-  migration_v13, migration_v14, migration_v15,
+  migration_v13, migration_v14, migration_v15, migration_v16,
 ];
 
 /**

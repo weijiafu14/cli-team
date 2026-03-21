@@ -83,6 +83,66 @@ export const conversation = {
   },
 };
 
+export interface ICoordTimelineEntry {
+  id: string;
+  ts: string;
+  from: string;
+  role: 'system' | 'user' | 'agent';
+  type: string;
+  summary: string;
+  body?: string;
+  topic?: string;
+  task_id?: string;
+}
+
+export interface IAgentTeamMemberCreateParams {
+  type: 'acp' | 'gemini';
+  name: string;
+  backend?: AcpBackendAll;
+  cliPath?: string;
+  customAgentId?: string;
+  presetAssistantId?: string;
+  enabledSkills?: string[];
+  sessionMode?: string;
+  currentModelId?: string;
+  model?: TProviderWithModel;
+}
+
+export interface ICreateAgentTeamParams {
+  name?: string;
+  workspace?: string;
+  customWorkspace?: boolean;
+  dispatchPolicy?: 'queue' | 'interrupt' | 'user-priority';
+  defaultView?: 'timeline' | 'agents';
+  members: IAgentTeamMemberCreateParams[];
+  initialMessage?: string;
+}
+
+export interface IAgentTeamCreateResult {
+  teamConversation: Extract<TChatConversation, { type: 'agent-team' }>;
+  memberConversations: TChatConversation[];
+}
+
+export interface IAgentTeamSendMessageParams {
+  conversation_id: string;
+  input: string;
+  msg_id?: string;
+}
+
+export const agentTeam = {
+  create: bridge.buildProvider<IBridgeResponse<IAgentTeamCreateResult>, ICreateAgentTeamParams>('agent-team.create'),
+  sendMessage: bridge.buildProvider<IBridgeResponse<{ entry: ICoordTimelineEntry }>, IAgentTeamSendMessageParams>(
+    'agent-team.send-message'
+  ),
+  getTimeline: bridge.buildProvider<IBridgeResponse<{ entries: ICoordTimelineEntry[] }>, { conversation_id: string }>(
+    'agent-team.get-timeline'
+  ),
+  getMembers: bridge.buildProvider<IBridgeResponse<{ conversations: TChatConversation[] }>, { conversation_id: string }>(
+    'agent-team.get-members'
+  ),
+  timelineStream: bridge.buildEmitter<{ conversation_id: string; entry: ICoordTimelineEntry }>('agent-team.timeline'),
+};
+
 // Gemini对话相关接口 - 复用统一的conversation接口
 export const geminiConversation = {
   sendMessage: conversation.sendMessage,
@@ -735,7 +795,7 @@ export interface IConfirmMessageParams {
 }
 
 export interface ICreateConversationParams {
-  type: 'gemini' | 'acp' | 'codex' | 'openclaw-gateway' | 'nanobot';
+  type: 'gemini' | 'acp' | 'codex' | 'openclaw-gateway' | 'nanobot' | 'agent-team';
   id?: string;
   name?: string;
   model: TProviderWithModel;
