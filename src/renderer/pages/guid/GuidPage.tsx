@@ -319,6 +319,7 @@ const GuidPage: React.FC = () => {
           {agentSelection.selectedAgentKey === 'agent-team' ? (
             <TeamBuilder
               availableAgents={agentSelection.availableAgents || []}
+              initialWorkspace={guidInput.dir}
               onTeamCreated={(teamConversation) => {
                 navigate(`/conversation/${teamConversation.id}`);
               }}
