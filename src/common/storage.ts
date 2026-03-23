@@ -276,6 +276,8 @@ export type TChatConversation =
           sessionMode?: string;
           /** User-selected Codex model from Guid page / 用户在引导页选择的 Codex 模型 */
           codexModel?: string;
+          /** Codex native session/conversation ID for resume across rebuilds */
+          codexNativeSessionId?: string;
           /** Explicit marker for temporary health-check conversations */
           isHealthCheck?: boolean;
           /** Parent team conversation ID when this is a team child / 所属 Agent Team 的会话 ID */
