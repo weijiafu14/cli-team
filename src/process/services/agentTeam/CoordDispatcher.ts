@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+import * as path from 'node:path';
 import { v4 as uuid } from 'uuid';
 import type { IAgentTeamMember } from '@/common/storage';
 import type { AgentTeamDispatchPolicy } from '@/common/storage';
@@ -148,7 +149,7 @@ export class CoordDispatcher {
         input: coordText,
         content: coordText,
         msg_id: uuid(),
-        files: [],
+        files: msg.files || [],
       });
     } catch (err) {
       console.error(`[CoordDispatcher] Failed to dispatch to ${state.member.name}:`, err);
@@ -327,16 +328,34 @@ export class CoordDispatcher {
       'This is an internal scheduler notice, not a user-facing request.',
       'Do not echo or quote this wakeup text back into chat or coord.',
       `You have ${messages.length} unread coordination message(s).`,
-      `Run now: python3 .agents/coord/scripts/coord_read.py --agent-id ${state.member.memberId}`,
-      'Use TEAM.md and .agents/coord/protocol.md as the source of truth.',
+      `Run now: python3 ${this.getRelCoordDir()}/scripts/coord_read.py --messages ${this.getRelCoordDir()}/messages.jsonl --state-dir ${this.getRelCoordDir()}/state --agent-id ${state.member.memberId}`,
+      `Use ${this.getRelCoordDir()}/TEAM.md and ${this.getRelCoordDir()}/protocol.md as the source of truth.`,
       'After reading unread coord messages, continue work and write back only through coord_write.py.',
       'If you call coord_write.py, --summary is mandatory on every write, including when using --body or --body-file.',
       'If /consensus is active, do not end until you ACK the final decision.',
       topics.length > 0 ? `Recent topics: ${topics.join(', ')}` : '',
       summaryLines.length > 0 ? 'Recent unread summaries:' : '',
       ...summaryLines,
+      ...this.getFileHints(messages),
     ]
       .filter(Boolean)
       .join('\n');
+  }
+
+  /** Get the relative coord directory path (e.g. .agents/teams/<teamId>/coord) */
+  private getRelCoordDir(): string {
+    // coordDir is absolute like /path/to/workspace/.agents/teams/<teamId>/coord
+    // Extract from .agents onwards
+    const idx = this.coordDir.indexOf('.agents');
+    return idx >= 0 ? this.coordDir.slice(idx) : this.coordDir;
+  }
+
+  private getFileHints(messages: ICoordTimelineEntry[]): string[] {
+    const allFiles = messages.flatMap((m) => m.files || []);
+    if (allFiles.length === 0) return [];
+    return [
+      `Attached files (${allFiles.length}):`,
+      ...allFiles.map((f) => `- ${f}`),
+    ];
   }
 }

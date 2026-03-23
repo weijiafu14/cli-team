@@ -8,9 +8,14 @@ import React, { useState, useCallback, useEffect, useRef } from 'react';
 import { agentTeam, conversation as ipcConversation, type ICoordTimelineEntry } from '@/common/ipcBridge';
 import { ConversationProvider } from '@/renderer/hooks/context/ConversationContext';
 import SendBox from '@/renderer/components/chat/sendbox';
+import FileAttachButton from '@/renderer/components/media/FileAttachButton';
+import FilePreview from '@/renderer/components/media/FilePreview';
+import HorizontalFileList from '@/renderer/components/media/HorizontalFileList';
+import { useOpenFileSelector } from '@/renderer/hooks/file/useOpenFileSelector';
 import MarkdownView from '@/renderer/components/Markdown';
 import { getAgentLogo } from '@/renderer/utils/model/agentLogo';
 import type { IAgentTeamMember } from '@/common/storage';
+import type { FileMetadata } from '@/renderer/services/FileService';
 import { useNavigate } from 'react-router-dom';
 import styles from './AgentTeamChat.module.css';
 
@@ -52,6 +57,24 @@ export default function AgentTeamChat({ conversation_id, workspace }: AgentTeamC
   const timelineRef = useRef<HTMLDivElement>(null);
   const shouldAutoScrollRef = useRef(false);
   const [memberMap, setMemberMap] = useState<Map<string, { name: string; backend?: string; type: string }>>(new Map());
+  const [pendingFiles, setPendingFiles] = useState<FileMetadata[]>([]);
+
+  const handleFilesAdded = useCallback((files: FileMetadata[]) => {
+    setPendingFiles((prev) => [...prev, ...files]);
+  }, []);
+
+  const { openFileSelector } = useOpenFileSelector({
+    onFilesSelected: (paths) => {
+      const files: FileMetadata[] = paths.map((p) => ({
+        path: p,
+        name: p.split('/').pop() || p,
+        size: 0,
+        type: '',
+        lastModified: Date.now(),
+      }));
+      handleFilesAdded(files);
+    },
+  });
 
   // Load team members for avatar mapping — use team.extra.members[] which has memberId
   useEffect(() => {
@@ -105,23 +128,26 @@ export default function AgentTeamChat({ conversation_id, workspace }: AgentTeamC
 
   const handleSend = useCallback(async (message: string) => {
     const text = message.trim();
-    if (!text) return;
+    if (!text && pendingFiles.length === 0) return;
 
     setSending(true);
     try {
+      const filePaths = pendingFiles.length > 0 ? pendingFiles.map((f) => f.path) : undefined;
       const result = await agentTeam.sendMessage.invoke({
         conversation_id,
         input: text,
+        files: filePaths,
       });
       if (result.success && result.data?.entry) {
         setTimeline((prev) => mergeTimelineEntries(prev, result.data!.entry));
       }
+      setPendingFiles([]);
     } catch (err) {
       console.error('[AgentTeamChat] Send failed:', err);
     } finally {
       setSending(false);
     }
-  }, [conversation_id]);
+  }, [conversation_id, pendingFiles]);
 
   return (
     <ConversationProvider value={{ conversationId: conversation_id, workspace, type: 'agent-team' }}>
@@ -180,6 +206,20 @@ export default function AgentTeamChat({ conversation_id, workspace }: AgentTeamC
                         <MarkdownView>{entry.body}</MarkdownView>
                       </div>
                     )}
+                    {entry.files && entry.files.length > 0 && (
+                      <div className={styles.entryFiles}>
+                        <HorizontalFileList>
+                          {entry.files.map((filePath, i) => (
+                            <FilePreview
+                              key={`${filePath}-${i}`}
+                              path={filePath}
+                              onRemove={() => {}}
+                              readonly
+                            />
+                          ))}
+                        </HorizontalFileList>
+                      </div>
+                    )}
                   </div>
                 );
               })
@@ -190,6 +230,19 @@ export default function AgentTeamChat({ conversation_id, workspace }: AgentTeamC
         )}
 
         <div className={styles.inputArea}>
+          {pendingFiles.length > 0 && (
+            <div className={styles.pendingFiles}>
+              <HorizontalFileList>
+                {pendingFiles.map((f, i) => (
+                  <FilePreview
+                    key={`${f.path}-${i}`}
+                    path={f.path}
+                    onRemove={() => setPendingFiles((prev) => prev.filter((_, j) => j !== i))}
+                  />
+                ))}
+              </HorizontalFileList>
+            </div>
+          )}
           <SendBox
             value={inputValue}
             onChange={setInputValue}
@@ -198,6 +251,10 @@ export default function AgentTeamChat({ conversation_id, workspace }: AgentTeamC
             disabled={sending}
             placeholder='Send a message to the team...'
             defaultMultiLine
+            onFilesAdded={handleFilesAdded}
+            tools={
+              <FileAttachButton openFileSelector={openFileSelector} onLocalFilesAdded={handleFilesAdded} />
+            }
           />
         </div>
       </div>

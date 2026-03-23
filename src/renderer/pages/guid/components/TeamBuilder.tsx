@@ -6,14 +6,18 @@
 
 import React, { useState, useCallback } from 'react';
 import { Button, Input, Message } from '@arco-design/web-react';
-import { Peoples, Add } from '@icon-park/react';
-import { agentTeam } from '@/common/ipcBridge';
+import { Peoples, Add, FolderOpen } from '@icon-park/react';
+import { agentTeam, dialog } from '@/common/ipcBridge';
 import type { TChatConversation } from '@/common/storage';
 import type { AcpBackendAll } from '@/types/acpTypes';
 import { getAgentLogo } from '@/renderer/utils/model/agentLogo';
+import SendBox from '@/renderer/components/chat/sendbox';
+import FileAttachButton from '@/renderer/components/media/FileAttachButton';
+import FilePreview from '@/renderer/components/media/FilePreview';
+import HorizontalFileList from '@/renderer/components/media/HorizontalFileList';
+import { useOpenFileSelector } from '@/renderer/hooks/file/useOpenFileSelector';
+import type { FileMetadata } from '@/renderer/services/FileService';
 import type { AvailableAgent } from '../types';
-
-const { TextArea } = Input;
 
 type TeamBuilderProps = {
   availableAgents: AvailableAgent[];
@@ -32,7 +36,25 @@ const TeamBuilder: React.FC<TeamBuilderProps> = ({ availableAgents, onTeamCreate
   const [teamName, setTeamName] = useState('');
   const [workspace, setWorkspace] = useState(initialWorkspace || '');
   const [initialMessage, setInitialMessage] = useState('');
+  const [initialFiles, setInitialFiles] = useState<FileMetadata[]>([]);
   const [selectedMembers, setSelectedMembers] = useState<MemberSelection[]>([]);
+
+  const handleFilesAdded = useCallback((files: FileMetadata[]) => {
+    setInitialFiles((prev) => [...prev, ...files]);
+  }, []);
+
+  const { openFileSelector } = useOpenFileSelector({
+    onFilesSelected: (paths) => {
+      const files: FileMetadata[] = paths.map((p) => ({
+        path: p,
+        name: p.split('/').pop() || p,
+        size: 0,
+        type: '',
+        lastModified: Date.now(),
+      }));
+      handleFilesAdded(files);
+    },
+  });
   const [creating, setCreating] = useState(false);
 
   // Build member options from available agents
@@ -77,6 +99,7 @@ const TeamBuilder: React.FC<TeamBuilderProps> = ({ availableAgents, onTeamCreate
           backend: m.backend as AcpBackendAll | undefined,
         })),
         initialMessage: initialMessage || undefined,
+        initialFiles: initialFiles.length > 0 ? initialFiles.map((f) => f.path) : undefined,
         dispatchPolicy: 'queue',
         defaultView: 'timeline',
       });
@@ -110,7 +133,22 @@ const TeamBuilder: React.FC<TeamBuilderProps> = ({ availableAgents, onTeamCreate
 
         <div>
           <label className='text-13px text-t-secondary mb-4px block'>Workspace (optional)</label>
-          <Input value={workspace} onChange={setWorkspace} placeholder='Leave empty for auto-generated workspace' />
+          <div className='flex gap-8px'>
+            <Input
+              className='flex-1'
+              value={workspace}
+              onChange={setWorkspace}
+              placeholder='Leave empty for auto-generated workspace'
+            />
+            <Button
+              icon={<FolderOpen size={16} />}
+              onClick={() => {
+                dialog.showOpen.invoke({ properties: ['openDirectory'] }).then((dirs) => {
+                  if (dirs && dirs[0]) setWorkspace(dirs[0]);
+                });
+              }}
+            />
+          </div>
         </div>
 
         <div>
@@ -152,12 +190,33 @@ const TeamBuilder: React.FC<TeamBuilderProps> = ({ availableAgents, onTeamCreate
         </div>
 
         <div>
-          <label className='text-13px text-t-secondary mb-4px block'>Initial Message (optional)</label>
-          <TextArea
+          <label className='text-13px text-t-secondary mb-4px block'>Initial Brief (optional)</label>
+          {initialFiles.length > 0 && (
+            <div className='mb-8px'>
+              <HorizontalFileList>
+                {initialFiles.map((f, i) => (
+                  <FilePreview
+                    key={`${f.path}-${i}`}
+                    path={f.path}
+                    onRemove={() => setInitialFiles((prev) => prev.filter((_, j) => j !== i))}
+                  />
+                ))}
+              </HorizontalFileList>
+            </div>
+          )}
+          <SendBox
             value={initialMessage}
             onChange={setInitialMessage}
-            placeholder='Send an initial task to the team...'
-            autoSize={{ minRows: 2, maxRows: 4 }}
+            onSend={async () => {
+              await handleCreate();
+            }}
+            placeholder='Give the team a starting task...'
+            defaultMultiLine
+            lockMultiLine
+            onFilesAdded={handleFilesAdded}
+            tools={
+              <FileAttachButton openFileSelector={openFileSelector} onLocalFilesAdded={handleFilesAdded} />
+            }
           />
         </div>
 

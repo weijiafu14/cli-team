@@ -97,6 +97,8 @@ export interface ICoordTimelineEntry {
   dispatch?: 'all' | 'targets' | 'none';
   /** Target member IDs for dispatch=targets, or ['*'] for all, or ['user'] for none */
   to?: string[];
+  /** Persisted team attachment paths copied into coord/attachments */
+  files?: string[];
 }
 
 export interface IAgentTeamMemberCreateParams {
@@ -120,6 +122,7 @@ export interface ICreateAgentTeamParams {
   defaultView?: 'timeline' | 'agents';
   members: IAgentTeamMemberCreateParams[];
   initialMessage?: string;
+  initialFiles?: string[];
 }
 
 export interface IAgentTeamCreateResult {
@@ -131,6 +134,7 @@ export interface IAgentTeamSendMessageParams {
   conversation_id: string;
   input: string;
   msg_id?: string;
+  files?: string[];
 }
 
 export const agentTeam = {
