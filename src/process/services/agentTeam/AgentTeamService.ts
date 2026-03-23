@@ -121,7 +121,7 @@ const DEFAULT_GEMINI_MODEL: TProviderWithModel = {
   platform: 'gemini-with-google-auth',
   baseUrl: '',
   apiKey: '',
-  useModel: 'default',
+  useModel: 'auto-gemini-3',
 };
 
 export class AgentTeamService {
