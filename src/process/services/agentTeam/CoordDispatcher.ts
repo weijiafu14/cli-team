@@ -96,7 +96,43 @@ export class CoordDispatcher {
   }
 
   private resolveTargets(msg: ICoordTimelineEntry): string[] {
-    // Broadcast to all members
+    // User messages always wake all members
+    if (msg.role === 'user') {
+      return Array.from(this.memberStates.keys());
+    }
+
+    // Respect dispatch field
+    const dispatch = msg.dispatch || 'all';
+
+    if (dispatch === 'none') {
+      return [];
+    }
+
+    if (dispatch === 'targets' && msg.to && msg.to.length > 0) {
+      // Resolve target identities to conversationIds
+      const targets: string[] = [];
+      for (const target of msg.to) {
+        if (target === '*') {
+          return Array.from(this.memberStates.keys());
+        }
+        if (target === 'user') {
+          continue;
+        }
+        // Match by conversationId, memberId, or member name
+        for (const state of this.memberStates.values()) {
+          if (
+            state.member.conversationId === target ||
+            state.member.memberId === target ||
+            state.member.name === target
+          ) {
+            targets.push(state.member.conversationId);
+          }
+        }
+      }
+      return targets;
+    }
+
+    // dispatch=all or unset: broadcast to all members
     return Array.from(this.memberStates.keys());
   }
 

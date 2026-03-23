@@ -92,6 +92,36 @@
   font-size: 11px;
 }
 
+.entryLogo {
+  width: 18px;
+  height: 18px;
+  border-radius: 4px;
+  object-fit: contain;
+  flex-shrink: 0;
+}
+
+.entryUserIcon {
+  width: 18px;
+  height: 18px;
+  border-radius: 4px;
+  background: var(--color-primary-light-4, #6aa1ff);
+  color: #fff;
+  font-size: 11px;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.entryDispatch {
+  padding: 1px 6px;
+  border-radius: 4px;
+  background: var(--color-fill-1);
+  color: var(--color-text-4);
+  font-size: 11px;
+}
+
 .entryTime {
   color: var(--color-text-4);
   margin-left: auto;
@@ -143,6 +173,14 @@
 
 .memberCard:hover {
   border-color: var(--color-primary-light-4);
+}
+
+.memberLogo {
+  width: 24px;
+  height: 24px;
+  border-radius: 6px;
+  object-fit: contain;
+  flex-shrink: 0;
 }
 
 .memberName {

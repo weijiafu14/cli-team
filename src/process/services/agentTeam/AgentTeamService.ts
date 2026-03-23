@@ -77,6 +77,8 @@ You are part of an Agent Team. Follow these rules strictly.
 - Write: \`python3 .agents/coord/scripts/coord_write.py --agent-id <memberId> --type <type> --summary "<summary>"\`
 - Long content: \`python3 .agents/coord/scripts/coord_write.py --agent-id <memberId> --type design --summary "<summary>" --body-file <path>\`
 - Lock: \`python3 .agents/coord/scripts/coord_write.py --agent-id <memberId> --type claim --summary "<summary>" --lock-key <key> --lock-action acquire\`
+- Direct message (wake specific member only): add \`--dispatch targets --to <memberId>\`
+- No-wakeup message (timeline only): add \`--dispatch none --to user\`
 - Peek (without advancing cursor): add \`--peek\`
 `;
 }
@@ -292,6 +294,8 @@ export class AgentTeamService {
       body: input.input.trim(),
       topic: team.teamConversation.id,
       task_id: team.teamConversation.id,
+      dispatch: 'all',
+      to: ['*'],
     };
 
     const messagesPath = path.join(team.teamConversation.extra.coordDir, 'messages.jsonl');
@@ -591,6 +595,18 @@ Agents must not ignore user guidance, and must not flatter the user instead of d
 - \`lock\`: object with \`key\`, \`action\`, \`status\`
 - \`meta\`: free-form metadata
 - \`consensus\`: object for consensus tracking, for example \`{"required": true, "status": "in_progress" | "reached", "decision_id": "<msg-id>" }\`
+- \`dispatch\`: transport routing (\`all\` = broadcast and wake all members, \`targets\` = wake only members listed in \`to\`, \`none\` = append to timeline only, do not wake any agent). Default is \`all\`.
+
+## Dispatch Rules
+
+The \`dispatch\` field controls which agents are woken up when a message is appended:
+
+- User messages always wake all agents regardless of \`dispatch\`.
+- \`dispatch=all\`: wake every member except the sender. Use \`to: ["*"]\`.
+- \`dispatch=targets\`: wake only the members listed in \`to\`. Use \`to: ["<memberId>", ...]\`.
+- \`dispatch=none\`: do not wake any agent. Use \`to: ["user"]\`. The message is visible in the timeline but no agent is interrupted.
+
+Use \`--dispatch\` flag with \`coord_write.py\` to set this field.
 
 ## Lock Rules
 
@@ -899,6 +915,7 @@ def main() -> int:
     parser.add_argument("--lock-key", default="")
     parser.add_argument("--lock-action", choices=["none", "acquire", "release"], default="none")
     parser.add_argument("--force-lock", action="store_true")
+    parser.add_argument("--dispatch", choices=["all", "targets", "none"], default="all")
     args = parser.parse_args()
 
     msg_id = f"msg-{datetime.now().strftime('%Y%m%d%H%M%S')}-{uuid4().hex[:8]}"
@@ -922,6 +939,7 @@ def main() -> int:
         "task_id": args.task_id,
         "type": args.type,
         "summary": args.summary,
+        "dispatch": args.dispatch,
     }
     if inline_body:
         msg["body"] = inline_body
