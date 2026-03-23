@@ -42,10 +42,13 @@ function mergeTimelineEntries(
   }
 
   return Array.from(byId.values()).sort((a, b) => {
-    if (a.ts === b.ts) {
+    // Use Date.parse for correct sorting across UTC and local timezone formats
+    const timeA = new Date(a.ts).getTime();
+    const timeB = new Date(b.ts).getTime();
+    if (timeA === timeB) {
       return a.id.localeCompare(b.id);
     }
-    return a.ts.localeCompare(b.ts);
+    return timeA - timeB;
   });
 }
 

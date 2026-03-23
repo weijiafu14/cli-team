@@ -312,9 +312,16 @@ export class AgentTeamService {
       if (attachedFiles.length === 0) attachedFiles = undefined;
     }
 
+    // Use local timezone ISO format to match coord_write.py output (not UTC)
+    const now = new Date();
+    const tzOffset = -now.getTimezoneOffset();
+    const sign = tzOffset >= 0 ? '+' : '-';
+    const pad = (n: number) => String(Math.abs(n)).padStart(2, '0');
+    const localIso = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}T${pad(now.getHours())}:${pad(now.getMinutes())}:${pad(now.getSeconds())}${sign}${pad(Math.floor(tzOffset / 60))}:${pad(tzOffset % 60)}`;
+
     const entry: ICoordTimelineEntry = {
       id: msgId,
-      ts: new Date().toISOString(),
+      ts: localIso,
       from: 'user',
       role: 'user',
       type: isConsensus ? 'consensus' : 'message',
