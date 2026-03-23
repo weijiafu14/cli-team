@@ -133,8 +133,8 @@ export class AgentTeamService {
     }
 
     const { workspace, customWorkspace } = await this.resolveWorkspace(input.workspace, input.customWorkspace);
-    const coordDir = path.join(workspace, '.agents', 'coord');
     const teamId = uuid();
+    const coordDir = path.join(workspace, '.agents', 'teams', teamId, 'coord');
     const teamName = input.name || path.basename(workspace);
 
     // Pre-generate memberIds so we can inject them into presetContext/presetRules

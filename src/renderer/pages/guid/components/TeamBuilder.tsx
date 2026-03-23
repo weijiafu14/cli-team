@@ -5,11 +5,12 @@
  */
 
 import React, { useState, useCallback } from 'react';
-import { Button, Input, Select, Checkbox, Message } from '@arco-design/web-react';
+import { Button, Input, Message } from '@arco-design/web-react';
 import { Peoples, Add } from '@icon-park/react';
 import { agentTeam } from '@/common/ipcBridge';
 import type { TChatConversation } from '@/common/storage';
 import type { AcpBackendAll } from '@/types/acpTypes';
+import { getAgentLogo } from '@/renderer/utils/model/agentLogo';
 import type { AvailableAgent } from '../types';
 
 const { TextArea } = Input;
@@ -17,6 +18,7 @@ const { TextArea } = Input;
 type TeamBuilderProps = {
   availableAgents: AvailableAgent[];
   onTeamCreated: (conversation: Extract<TChatConversation, { type: 'agent-team' }>) => void;
+  initialWorkspace?: string;
 };
 
 type MemberSelection = {
@@ -26,9 +28,9 @@ type MemberSelection = {
   backend?: AcpBackendAll;
 };
 
-const TeamBuilder: React.FC<TeamBuilderProps> = ({ availableAgents, onTeamCreated }) => {
+const TeamBuilder: React.FC<TeamBuilderProps> = ({ availableAgents, onTeamCreated, initialWorkspace }) => {
   const [teamName, setTeamName] = useState('');
-  const [workspace, setWorkspace] = useState('');
+  const [workspace, setWorkspace] = useState(initialWorkspace || '');
   const [initialMessage, setInitialMessage] = useState('');
   const [selectedMembers, setSelectedMembers] = useState<MemberSelection[]>([]);
   const [creating, setCreating] = useState(false);
@@ -94,60 +96,63 @@ const TeamBuilder: React.FC<TeamBuilderProps> = ({ availableAgents, onTeamCreate
   }, [teamName, workspace, initialMessage, selectedMembers, onTeamCreated]);
 
   return (
-    <div
-      style={{
-        width: '100%',
-        maxWidth: 560,
-        margin: '0 auto',
-        padding: 24,
-        borderRadius: 12,
-        background: 'var(--color-bg-2)',
-        border: '1px solid var(--color-border)',
-      }}
-    >
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 20 }}>
+    <div className='w-full max-w-560px mx-auto p-24px rd-12px bg-2 b-1 b-solid b-border'>
+      <div className='flex items-center gap-8px mb-20px'>
         <Peoples theme='outline' size={24} fill='var(--color-text-1)' />
-        <span style={{ fontSize: 18, fontWeight: 600, color: 'var(--color-text-1)' }}>Create Agent Team</span>
+        <span className='text-18px font-semibold text-t-primary'>Create Agent Team</span>
       </div>
 
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+      <div className='flex flex-col gap-16px'>
         <div>
-          <label style={{ fontSize: 13, color: 'var(--color-text-2)', marginBottom: 4, display: 'block' }}>
-            Team Name
-          </label>
+          <label className='text-13px text-t-secondary mb-4px block'>Team Name</label>
           <Input value={teamName} onChange={setTeamName} placeholder='My Agent Team' />
         </div>
 
         <div>
-          <label style={{ fontSize: 13, color: 'var(--color-text-2)', marginBottom: 4, display: 'block' }}>
-            Workspace (optional)
-          </label>
+          <label className='text-13px text-t-secondary mb-4px block'>Workspace (optional)</label>
           <Input value={workspace} onChange={setWorkspace} placeholder='Leave empty for auto-generated workspace' />
         </div>
 
         <div>
-          <label style={{ fontSize: 13, color: 'var(--color-text-2)', marginBottom: 8, display: 'block' }}>
-            Team Members (select at least 2)
-          </label>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-            {memberOptions.map((option) => (
-              <Checkbox
-                key={option.key}
-                checked={selectedMembers.some((m) => m.key === option.key)}
-                onChange={(checked) => handleToggleMember(option, checked)}
-              >
-                <span style={{ marginLeft: 4 }}>
-                  {option.label} <span style={{ color: 'var(--color-text-3)', fontSize: 12 }}>({option.type})</span>
-                </span>
-              </Checkbox>
-            ))}
+          <label className='text-13px text-t-secondary mb-8px block'>Team Members (select at least 2)</label>
+          <div className='flex flex-col gap-4px'>
+            {memberOptions.map((option) => {
+              const logoSrc = getAgentLogo(option.backend);
+              const isSelected = selectedMembers.some((m) => m.key === option.key);
+              return (
+                <div
+                  key={option.key}
+                  className={`flex items-center gap-12px p-12px rd-8px cursor-pointer b-1 b-solid transition-all ${
+                    isSelected
+                      ? 'bg-primary-1 b-primary-light-3'
+                      : 'bg-2 b-border hover:b-primary-light-4'
+                  }`}
+                  onClick={() => handleToggleMember(option, !isSelected)}
+                >
+                  {logoSrc ? (
+                    <img src={logoSrc} alt='' width={24} height={24} className='rd-4px object-contain shrink-0' />
+                  ) : (
+                    <div className='w-24px h-24px rd-4px bg-fill-2 flex items-center justify-center text-12px text-t-secondary shrink-0'>
+                      {option.label.slice(0, 1)}
+                    </div>
+                  )}
+                  <div className='flex-1 min-w-0'>
+                    <div className='text-14px font-medium text-t-primary'>{option.label}</div>
+                    <div className='text-12px text-t-tertiary'>{option.type}</div>
+                  </div>
+                  <div className={`w-16px h-16px rd-full b-1 b-solid flex items-center justify-center shrink-0 transition-colors ${
+                    isSelected ? 'bg-primary-6 b-primary-6' : 'b-border'
+                  }`}>
+                    {isSelected && <span className='text-white text-10px'>✓</span>}
+                  </div>
+                </div>
+              );
+            })}
           </div>
         </div>
 
         <div>
-          <label style={{ fontSize: 13, color: 'var(--color-text-2)', marginBottom: 4, display: 'block' }}>
-            Initial Message (optional)
-          </label>
+          <label className='text-13px text-t-secondary mb-4px block'>Initial Message (optional)</label>
           <TextArea
             value={initialMessage}
             onChange={setInitialMessage}

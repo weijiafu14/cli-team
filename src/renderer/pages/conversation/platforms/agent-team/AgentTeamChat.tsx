@@ -5,17 +5,14 @@
  */
 
 import React, { useState, useCallback, useEffect, useRef } from 'react';
-import { Input, Button } from '@arco-design/web-react';
-import { Send } from '@icon-park/react';
 import { agentTeam, conversation as ipcConversation, type ICoordTimelineEntry } from '@/common/ipcBridge';
 import { ConversationProvider } from '@/renderer/hooks/context/ConversationContext';
+import SendBox from '@/renderer/components/chat/sendbox';
 import MarkdownView from '@/renderer/components/Markdown';
 import { getAgentLogo } from '@/renderer/utils/model/agentLogo';
 import type { IAgentTeamMember } from '@/common/storage';
 import { useNavigate } from 'react-router-dom';
 import styles from './AgentTeamChat.module.css';
-
-const { TextArea } = Input;
 
 type AgentTeamChatProps = {
   conversation_id: string;
@@ -53,7 +50,6 @@ export default function AgentTeamChat({ conversation_id, workspace }: AgentTeamC
   const [inputValue, setInputValue] = useState('');
   const [sending, setSending] = useState(false);
   const timelineRef = useRef<HTMLDivElement>(null);
-  const timelineEndRef = useRef<HTMLDivElement>(null);
   const shouldAutoScrollRef = useRef(false);
   const [memberMap, setMemberMap] = useState<Map<string, { name: string; backend?: string; type: string }>>(new Map());
 
@@ -107,19 +103,16 @@ export default function AgentTeamChat({ conversation_id, workspace }: AgentTeamC
     shouldAutoScrollRef.current = false;
   }, [timeline]);
 
-  const handleSend = useCallback(async () => {
-    const text = inputValue.trim();
-    if (!text || sending) return;
+  const handleSend = useCallback(async (message: string) => {
+    const text = message.trim();
+    if (!text) return;
 
     setSending(true);
-    setInputValue('');
-
     try {
       const result = await agentTeam.sendMessage.invoke({
         conversation_id,
         input: text,
       });
-      // Optimistic: merge returned entry in case stream event hasn't arrived yet
       if (result.success && result.data?.entry) {
         setTimeline((prev) => mergeTimelineEntries(prev, result.data!.entry));
       }
@@ -128,17 +121,7 @@ export default function AgentTeamChat({ conversation_id, workspace }: AgentTeamC
     } finally {
       setSending(false);
     }
-  }, [conversation_id, inputValue, sending]);
-
-  const handleKeyDown = useCallback(
-    (e: React.KeyboardEvent) => {
-      if (e.key === 'Enter' && !e.shiftKey) {
-        e.preventDefault();
-        handleSend();
-      }
-    },
-    [handleSend],
-  );
+  }, [conversation_id]);
 
   return (
     <ConversationProvider value={{ conversationId: conversation_id, workspace, type: 'agent-team' }}>
@@ -207,15 +190,15 @@ export default function AgentTeamChat({ conversation_id, workspace }: AgentTeamC
         )}
 
         <div className={styles.inputArea}>
-          <TextArea
+          <SendBox
             value={inputValue}
             onChange={setInputValue}
-            onKeyDown={handleKeyDown}
-            placeholder="Send a message to the team... (Enter to send, Shift+Enter for newline)"
-            autoSize={{ minRows: 1, maxRows: 4 }}
+            onSend={handleSend}
+            loading={sending}
             disabled={sending}
+            placeholder='Send a message to the team...'
+            defaultMultiLine
           />
-          <Button type="primary" icon={<Send />} onClick={handleSend} loading={sending} disabled={!inputValue.trim()} />
         </div>
       </div>
     </ConversationProvider>
