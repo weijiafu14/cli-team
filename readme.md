@@ -39,6 +39,29 @@
 
 ---
 
+## 🤝 Agent Team — Cross-Vendor AI Collaboration (Fork Feature)
+
+> This fork adds **Agent Team**: let Claude Code, Codex, and Gemini collaborate in one shared workspace.
+
+I'm a solo developer who uses Codex App and Claude Code daily. I think if AionUi only focuses on wrapping individual code agents, it's hard to beat the native experience of Codex App or Claude Code directly. But **cross-vendor agent teaming** is a completely open field — and it works really well in practice.
+
+I've been letting Claude Code and Codex work together for a few weeks. Codex keeps goal consistency and quality standards, Claude Code handles heavy implementation, and they challenge each other's decisions. The results have been genuinely great.
+
+**What Agent Team does:**
+- 🏗️ Create a team with any combination of Claude Code, Codex, Gemini sharing one workspace
+- 📋 Shared timeline showing agent coordination (claim, challenge, ack, decision, etc.)
+- 🔗 Child sessions nested under the team parent — click to see each agent's detailed work
+- 🤝 `/consensus` command — agents must explicitly agree before finishing, giving higher accuracy
+- 📁 Workspace-first sidebar — all conversations grouped by workspace, team children nested
+
+**Built on a file-based coordination protocol** (`messages.jsonl` + cursor tracking) so agents communicate through structured messages without any external service.
+
+> **Try it:** Clone this repo and build. See [Quick Start](#-quick-start) below.
+>
+> **Upstream PR:** [iOfficeAI/AionUi#1634](https://github.com/iOfficeAI/AionUi/pull/1634)
+
+---
+
 ## 📋 Quick Navigation
 
 <p align="center">
