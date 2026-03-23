@@ -22,6 +22,20 @@ just install
 just dev
 ```
 
+## Local Dev Playbook
+
+For the verified local workflow used to develop AionUi itself, including:
+
+- PM2-based WebUI bring-up
+- dev vs packaged port separation
+- Agent Team runtime locations
+- Codex ACP `v0.10.0` binary override
+- using a packaged app to work on the `AionUi/` workspace itself
+
+see:
+
+- [local-dev-playbook.md](/Users/weijiafu8/projj/coding.jd.com/fm-common/synDbToEs/AionUi/docs/local-dev-playbook.md)
+
 ## Code Checks (prek)
 
 The project uses [prek](https://github.com/j178/prek) (a Rust implementation of pre-commit) for code checks, configured in `.pre-commit-config.yaml`:

@@ -1,0 +1,30 @@
+{
+  "platform": "darwin",
+  "arch": "arm64",
+  "version": "latest",
+  "generatedAt": "2026-03-23T16:10:32.677Z",
+  "sourceType": "cache",
+  "cacheDir": "/Users/weijiafu8/Library/Caches/AionUi/bundled-bun/latest/darwin-arm64",
+  "cacheMeta": {
+    "platform": "darwin",
+    "arch": "arm64",
+    "version": "latest",
+    "sourceType": "download",
+    "source": {
+      "url": "https://github.com/oven-sh/bun/releases/latest/download/bun-darwin-aarch64.zip",
+      "asset": "bun-darwin-aarch64.zip"
+    },
+    "updatedAt": "2026-03-23T12:19:27.666Z"
+  },
+  "source": {
+    "dir": "/Users/weijiafu8/Library/Caches/AionUi/bundled-bun/latest/darwin-arm64",
+    "origin": {
+      "url": "https://github.com/oven-sh/bun/releases/latest/download/bun-darwin-aarch64.zip",
+      "asset": "bun-darwin-aarch64.zip"
+    }
+  },
+  "files": [
+    "bun"
+  ],
+  "skipped": false
+}
