@@ -28,6 +28,8 @@ export interface ICoordTimelineEntry {
   /** Target member IDs for dispatch=targets, or ['*'] for all, or ['user'] for none */
   to?: string[];
   files?: string[];
+  /** Message ID being replied to (required for consensus ACK) */
+  reply_to?: string;
 }
 
 export interface IAgentTeamMemberInput {

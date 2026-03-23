@@ -99,6 +99,8 @@ export interface ICoordTimelineEntry {
   to?: string[];
   /** Persisted team attachment paths copied into coord/attachments */
   files?: string[];
+  /** Message ID being replied to (required for consensus ACK) */
+  reply_to?: string;
 }
 
 export interface IAgentTeamMemberCreateParams {
