@@ -7,9 +7,11 @@
 import React, { useState, useCallback, useEffect, useRef } from 'react';
 import { Input, Button } from '@arco-design/web-react';
 import { Send } from '@icon-park/react';
-import { agentTeam, type ICoordTimelineEntry } from '@/common/ipcBridge';
+import { agentTeam, conversation as ipcConversation, type ICoordTimelineEntry } from '@/common/ipcBridge';
 import { ConversationProvider } from '@/renderer/hooks/context/ConversationContext';
 import MarkdownView from '@/renderer/components/Markdown';
+import { getAgentLogo } from '@/renderer/utils/model/agentLogo';
+import type { IAgentTeamMember } from '@/common/storage';
 import { useNavigate } from 'react-router-dom';
 import styles from './AgentTeamChat.module.css';
 
@@ -53,6 +55,23 @@ export default function AgentTeamChat({ conversation_id, workspace }: AgentTeamC
   const timelineRef = useRef<HTMLDivElement>(null);
   const timelineEndRef = useRef<HTMLDivElement>(null);
   const shouldAutoScrollRef = useRef(false);
+  const [memberMap, setMemberMap] = useState<Map<string, { name: string; backend?: string; type: string }>>(new Map());
+
+  // Load team members for avatar mapping — use team.extra.members[] which has memberId
+  useEffect(() => {
+    ipcConversation.get.invoke({ id: conversation_id }).then((teamConv) => {
+      if (!teamConv || teamConv.type !== 'agent-team') return;
+      const members = (teamConv.extra as { members?: IAgentTeamMember[] }).members || [];
+      const map = new Map<string, { name: string; backend?: string; type: string }>();
+      for (const m of members) {
+        const info = { name: m.name, backend: m.backend || m.type, type: m.type };
+        map.set(m.memberId, info);          // coord from=memberId
+        map.set(m.conversationId, info);     // fallback: from=conversationId
+        map.set(m.name, info);               // fallback: from=name
+      }
+      setMemberMap(map);
+    });
+  }, [conversation_id]);
 
   // Load initial timeline
   useEffect(() => {
@@ -148,21 +167,39 @@ export default function AgentTeamChat({ conversation_id, workspace }: AgentTeamC
             {timeline.length === 0 ? (
               <div className={styles.empty}>No coordination messages yet. Send a message to start the team.</div>
             ) : (
-              timeline.map((entry) => (
-                <div key={entry.id} className={styles.entry}>
-                  <div className={styles.entryHeader}>
-                    <span className={styles.entryFrom}>{entry.from}</span>
-                    <span className={styles.entryType}>{entry.type}</span>
-                    <span className={styles.entryTime}>{new Date(entry.ts).toLocaleTimeString()}</span>
-                  </div>
-                  <div className={styles.entrySummary}>{entry.summary}</div>
-                  {entry.body && (
-                    <div className={styles.entryBody}>
-                      <MarkdownView>{entry.body}</MarkdownView>
+              timeline.map((entry) => {
+                const memberInfo = memberMap.get(entry.from);
+                const logoBackend = entry.role === 'user' ? null : (memberInfo?.backend || entry.from);
+                const logoSrc = logoBackend ? getAgentLogo(logoBackend) : null;
+                const displayName = entry.role === 'user' ? 'You' : (memberInfo?.name || entry.from);
+                const dispatchLabel = entry.dispatch === 'targets' && entry.to
+                  ? `→ ${entry.to.join(', ')}`
+                  : entry.dispatch === 'none'
+                    ? '(no wakeup)'
+                    : null;
+
+                return (
+                  <div key={entry.id} className={styles.entry}>
+                    <div className={styles.entryHeader}>
+                      {logoSrc ? (
+                        <img src={logoSrc} alt='' width={18} height={18} className={styles.entryLogo} />
+                      ) : (
+                        <div className={styles.entryUserIcon}>U</div>
+                      )}
+                      <span className={styles.entryFrom}>{displayName}</span>
+                      <span className={styles.entryType}>{entry.type}</span>
+                      {dispatchLabel && <span className={styles.entryDispatch}>{dispatchLabel}</span>}
+                      <span className={styles.entryTime}>{new Date(entry.ts).toLocaleTimeString()}</span>
                     </div>
-                  )}
-                </div>
-              ))
+                    <div className={styles.entrySummary}>{entry.summary}</div>
+                    {entry.body && (
+                      <div className={styles.entryBody}>
+                        <MarkdownView>{entry.body}</MarkdownView>
+                      </div>
+                    )}
+                  </div>
+                );
+              })
             )}
           </div>
         ) : (
@@ -186,7 +223,7 @@ export default function AgentTeamChat({ conversation_id, workspace }: AgentTeamC
 }
 
 function AgentsMembersView({ conversation_id }: { conversation_id: string }) {
-  const [members, setMembers] = useState<Array<{ id: string; name: string; type: string }>>([]);
+  const [members, setMembers] = useState<Array<{ id: string; name: string; type: string; backend?: string }>>([]);
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -197,6 +234,7 @@ function AgentsMembersView({ conversation_id }: { conversation_id: string }) {
             id: c.id,
             name: c.name,
             type: c.type,
+            backend: (c.extra as { backend?: string })?.backend,
           })),
         );
       }
@@ -208,19 +246,22 @@ function AgentsMembersView({ conversation_id }: { conversation_id: string }) {
       {members.length === 0 ? (
         <div className={styles.empty}>No team members found.</div>
       ) : (
-        members.map((member) => (
-          <div
-            key={member.id}
-            className={styles.memberCard}
-            style={{ cursor: 'pointer' }}
-            onClick={() => {
-              navigate(`/conversation/${member.id}`);
-            }}
-          >
-            <div className={styles.memberName}>{member.name}</div>
-            <div className={styles.memberType}>{member.type}</div>
-          </div>
-        ))
+        members.map((member) => {
+          const logoSrc = getAgentLogo(member.backend || member.type);
+          return (
+            <div
+              key={member.id}
+              className={styles.memberCard}
+              onClick={() => {
+                navigate(`/conversation/${member.id}`);
+              }}
+            >
+              {logoSrc && <img src={logoSrc} alt='' width={24} height={24} className={styles.memberLogo} />}
+              <div className={styles.memberName}>{member.name}</div>
+              <div className={styles.memberType}>{member.backend || member.type}</div>
+            </div>
+          );
+        })
       )}
     </div>
   );

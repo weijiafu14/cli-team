@@ -93,6 +93,10 @@ export interface ICoordTimelineEntry {
   body?: string;
   topic?: string;
   task_id?: string;
+  /** Transport routing: all=broadcast, targets=direct, none=no wakeup */
+  dispatch?: 'all' | 'targets' | 'none';
+  /** Target member IDs for dispatch=targets, or ['*'] for all, or ['user'] for none */
+  to?: string[];
 }
 
 export interface IAgentTeamMemberCreateParams {
