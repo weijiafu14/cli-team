@@ -71,7 +71,7 @@ You are part of an Agent Team. Follow these rules strictly.
 - Use \`challenge\` when you disagree with a proposal, finding, or decision. Do not hide disagreement inside \`update\`.
 - Use \`--body-file\` for long content so the full content lands in \`${cd}/attachments/\`.
 - Publish a \`design\` document before \`done\`.
-- If \`/consensus\` is active, you MUST explicitly \`ack\` the final decision before ending.
+- If \`/consensus\` is active, you MUST explicitly \`ack\` the final decision with \`--reply-to <decision-message-id>\` before ending.
 - Every \`coord_write.py\` call MUST include \`--summary\`, even when you also pass \`--body\` or \`--body-file\`.
 
 ## Message Types
@@ -101,7 +101,7 @@ Coordination rules:
 - If you disagree with a proposal, finding, or decision, send a challenge with evidence.
 - If content is long, write it through --body-file so it becomes an attachment.
 - Before done, publish a design document and attach it.
-- If /consensus is active, you MUST explicitly ack the final decision before ending.
+- If /consensus is active, you MUST explicitly ack the final decision with --reply-to <decision-message-id> before ending.
 - Read ${cd}/TEAM.md for team members and ${cd}/protocol.md for full protocol.`;
 }
 

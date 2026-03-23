@@ -239,8 +239,12 @@ export class CoordDispatcher {
       .find(({ entry }) => entry.type === 'decision' || entry.type === 'conclusion')?.index;
 
     const decisionWindow = decisionIndexInWindow === undefined ? [] : consensusWindow.slice(decisionIndexInWindow);
+    const finalDecisionId = decisionWindow[0]?.id;
+    // Only count ACKs whose reply_to matches the final decision (strict protocol requirement)
     const ackFroms = new Set(
-      decisionWindow.filter((entry) => entry.type === 'ack').map((entry) => entry.from),
+      decisionWindow
+        .filter((entry) => entry.type === 'ack' && finalDecisionId && entry.reply_to === finalDecisionId)
+        .map((entry) => entry.from),
     );
 
     const missingMembers = Array.from(this.memberStates.values()).filter(({ member }) => {
@@ -273,7 +277,7 @@ export class CoordDispatcher {
       type: 'consensus-reminder',
       summary: `Consensus still pending. Missing ACK from ${missingMembers.map((member) => member.member.name).join(', ')}`,
       body:
-        'Consensus has not been reached yet. Continue working and emit an explicit ack for the final decision before ending.',
+        'Consensus has not been reached yet. Emit an explicit ack with --reply-to <final-decision-id> before ending.',
     };
     void this.dispatchToMember(state, reminder);
   }
@@ -332,7 +336,7 @@ export class CoordDispatcher {
       `Use ${this.getRelCoordDir()}/TEAM.md and ${this.getRelCoordDir()}/protocol.md as the source of truth.`,
       'After reading unread coord messages, continue work and write back only through coord_write.py.',
       'If you call coord_write.py, --summary is mandatory on every write, including when using --body or --body-file.',
-      'If /consensus is active, do not end until you ACK the final decision.',
+      'If /consensus is active, do not end until you ACK the final decision with --reply-to <decision-id>.',
       topics.length > 0 ? `Recent topics: ${topics.join(', ')}` : '',
       summaryLines.length > 0 ? 'Recent unread summaries:' : '',
       ...summaryLines,
