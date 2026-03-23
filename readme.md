@@ -47,17 +47,59 @@ I'm a solo developer who uses Codex App and Claude Code daily. I think if AionUi
 
 I've been letting Claude Code and Codex work together for a few weeks. Codex keeps goal consistency and quality standards, Claude Code handles heavy implementation, and they challenge each other's decisions. The results have been genuinely great.
 
-**What Agent Team does:**
+### What It Does
+
 - 🏗️ Create a team with any combination of Claude Code, Codex, Gemini sharing one workspace
 - 📋 Shared timeline showing agent coordination (claim, challenge, ack, decision, etc.)
 - 🔗 Child sessions nested under the team parent — click to see each agent's detailed work
 - 🤝 `/consensus` command — agents must explicitly agree before finishing, giving higher accuracy
-- 📁 Workspace-first sidebar — all conversations grouped by workspace, team children nested
+- 📁 Workspace-first sidebar — all conversations grouped by workspace
+- 📎 File/image upload in both team creation and chat — attached files are persisted in coord assets
 
-**Built on a file-based coordination protocol** (`messages.jsonl` + cursor tracking) so agents communicate through structured messages without any external service.
+### How It Works
 
-> **Try it:** Clone this repo and build. See [Quick Start](#-quick-start) below.
->
+```
+User creates Agent Team (selects Claude Code + Codex, picks a workspace)
+  │
+  ├── 1 parent "agent-team" conversation (the team shell)
+  ├── N child conversations (one per agent, each is a real CLI session)
+  └── Shared workspace with isolated coord directory:
+        <workspace>/.agents/teams/<teamId>/coord/
+        ├── messages.jsonl    ← shared timeline (append-only JSONL)
+        ├── TEAM.md           ← team roster (members, roles)
+        ├── SKILL.md          ← coordination instructions for agents
+        ├── protocol.md       ← full coordination protocol rules
+        ├── scripts/          ← coord_read.py + coord_write.py
+        ├── attachments/      ← files, images, design docs
+        ├── locks/            ← mutual exclusion for concurrent edits
+        └── state/            ← per-agent cursor tracking
+```
+
+**The coordination loop:**
+
+1. User sends a message to the team → written to `messages.jsonl` as a `direction`
+2. `CoordDispatcher` (running in main process) detects new messages via `fs.watch`
+3. Dispatcher wakes up each agent by sending a "wakeup" message to their child session
+4. Agents read coord messages (`coord_read.py`), do their work, write back (`coord_write.py`)
+5. Agent responses appear in the timeline — visible to user and other agents
+6. If `/consensus` is active, dispatcher enforces all agents must explicitly `ack` the final decision
+
+**Key design choices:**
+- **File-based protocol** — no external service needed. Everything is in the workspace directory.
+- **Each team is fully isolated** — multiple teams on the same workspace get separate coord directories (`teams/<teamId>/coord/`)
+- **Agents are real CLI sessions** — Claude Code runs as actual Claude CLI, Codex runs as actual Codex CLI. AionUI just orchestrates.
+- **Dispatch routing** — messages have a `dispatch` field (`all`/`targets`/`none`) to control which agents get woken up, preventing infinite loops.
+- **Structured message types** — `claim`, `challenge`, `ack`, `decision`, `design`, `done`, etc. Agents follow a protocol, not just free chat.
+
+### Quick Start for Agent Team
+
+1. Clone and build this repo (see [Quick Start](#-quick-start) below)
+2. On the home page, click **Agent Team** in the agent picker
+3. Select at least 2 agents (e.g. Claude Code + Codex)
+4. Pick a workspace directory
+5. Write an initial task and create
+6. Watch the agents coordinate in the shared timeline
+
 > **Upstream PR:** [iOfficeAI/AionUi#1634](https://github.com/iOfficeAI/AionUi/pull/1634)
 
 ---
