@@ -26,7 +26,11 @@ import { CoordDispatcher } from './CoordDispatcher';
 
 // --- Template generators for workspace assets ---
 
-function generateTeamMd(teamName: string, members: Array<{ name: string; type: string; backend?: string; memberId: string }>): string {
+function getRelativeCoordDir(teamId: string): string {
+  return `.agents/teams/${teamId}/coord`;
+}
+
+function generateTeamMd(teamName: string, members: Array<{ name: string; type: string; backend?: string; memberId: string }>, teamId: string): string {
   const memberLines = members.map((m) => `- **${m.name}** (type: ${m.type}${m.backend ? `, backend: ${m.backend}` : ''}, memberId: ${m.memberId})`).join('\n');
   return `# Agent Team: ${teamName}
 
@@ -34,10 +38,10 @@ function generateTeamMd(teamName: string, members: Array<{ name: string; type: s
 ${memberLines}
 
 ## Coordination
-- Timeline: \`.agents/coord/messages.jsonl\`
-- Protocol: \`.agents/coord/protocol.md\`
-- Scripts: \`.agents/coord/scripts/\`
-- Attachments: \`.agents/coord/attachments/\`
+- Timeline: \`${getRelativeCoordDir(teamId)}/messages.jsonl\`
+- Protocol: \`${getRelativeCoordDir(teamId)}/protocol.md\`
+- Scripts: \`${getRelativeCoordDir(teamId)}/scripts/\`
+- Attachments: \`${getRelativeCoordDir(teamId)}/attachments/\`
 `;
 }
 
@@ -45,7 +49,8 @@ function generateProtocolMd(): string {
   return EMBEDDED_COORD_PROTOCOL_MD;
 }
 
-function generateSkillMd(): string {
+function generateSkillMd(teamId: string): string {
+  const cd = getRelativeCoordDir(teamId);
   return `---
 name: coord-protocol
 description: Agent Team coordination protocol - read/write coord messages, follow team rules
@@ -56,15 +61,15 @@ description: Agent Team coordination protocol - read/write coord messages, follo
 You are part of an Agent Team. Follow these rules strictly.
 
 ## Before Any Work
-1. Read the team info: \`cat TEAM.md\`
-2. Read the full protocol: \`cat .agents/coord/protocol.md\`
-3. Check for unread messages: \`python3 .agents/coord/scripts/coord_read.py --agent-id <your-memberId>\`
+1. Read the team info: \`cat ${cd}/TEAM.md\`
+2. Read the full protocol: \`cat ${cd}/protocol.md\`
+3. Check for unread messages: \`python3 ${cd}/scripts/coord_read.py --messages ${cd}/messages.jsonl --state-dir ${cd}/state --agent-id <your-memberId>\`
 4. Treat Agent Team wakeup messages as internal scheduler notices only. Never echo or quote those notices back into chat or coord.
 
 ## During Work
 - Use \`intent\` or \`claim\` before implementation. If the work is exclusive, acquire a lock.
 - Use \`challenge\` when you disagree with a proposal, finding, or decision. Do not hide disagreement inside \`update\`.
-- Use \`--body-file\` for long content so the full content lands in \`.agents/coord/attachments/\`.
+- Use \`--body-file\` for long content so the full content lands in \`${cd}/attachments/\`.
 - Publish a \`design\` document before \`done\`.
 - If \`/consensus\` is active, you MUST explicitly \`ack\` the final decision before ending.
 - Every \`coord_write.py\` call MUST include \`--summary\`, even when you also pass \`--body\` or \`--body-file\`.
@@ -73,21 +78,22 @@ You are part of an Agent Team. Follow these rules strictly.
 \`claim\`, \`intent\`, \`update\`, \`question\`, \`challenge\`, \`finding\`, \`design\`, \`decision\`, \`conclusion\`, \`ack\`, \`done\`
 
 ## Key Scripts
-- Read: \`python3 .agents/coord/scripts/coord_read.py --agent-id <memberId>\`
-- Write: \`python3 .agents/coord/scripts/coord_write.py --agent-id <memberId> --type <type> --summary "<summary>"\`
-- Long content: \`python3 .agents/coord/scripts/coord_write.py --agent-id <memberId> --type design --summary "<summary>" --body-file <path>\`
-- Lock: \`python3 .agents/coord/scripts/coord_write.py --agent-id <memberId> --type claim --summary "<summary>" --lock-key <key> --lock-action acquire\`
+- Read: \`python3 ${cd}/scripts/coord_read.py --messages ${cd}/messages.jsonl --state-dir ${cd}/state --agent-id <memberId>\`
+- Write: \`python3 ${cd}/scripts/coord_write.py --messages ${cd}/messages.jsonl --attachments-dir ${cd}/attachments --locks-dir ${cd}/locks --agent-id <memberId> --type <type> --summary "<summary>"\`
+- Long content: \`python3 ${cd}/scripts/coord_write.py --messages ${cd}/messages.jsonl --attachments-dir ${cd}/attachments --locks-dir ${cd}/locks --agent-id <memberId> --type design --summary "<summary>" --body-file <path>\`
+- Lock: \`python3 ${cd}/scripts/coord_write.py --messages ${cd}/messages.jsonl --attachments-dir ${cd}/attachments --locks-dir ${cd}/locks --agent-id <memberId> --type claim --summary "<summary>" --lock-key <key> --lock-action acquire\`
 - Direct message (wake specific member only): add \`--dispatch targets --to <memberId>\`
 - No-wakeup message (timeline only): add \`--dispatch none --to user\`
 - Peek (without advancing cursor): add \`--peek\`
 `;
 }
 
-function generatePresetPrompt(teamName: string, memberName: string, memberId: string): string {
+function generatePresetPrompt(teamName: string, memberName: string, memberId: string, teamId: string): string {
+  const cd = getRelativeCoordDir(teamId);
   return `You are member "${memberName}" (memberId: ${memberId}) of Agent Team "${teamName}".
 
 Coordination rules:
-- Read coord messages before acting: python3 .agents/coord/scripts/coord_read.py --agent-id ${memberId}
+- Read coord messages before acting: python3 ${cd}/scripts/coord_read.py --messages ${cd}/messages.jsonl --state-dir ${cd}/state --agent-id ${memberId}
 - Treat Agent Team wakeup messages as internal scheduler notices only. Do not echo them into chat or coord.
 - Write results back to coord with the correct message type, not only update.
 - Every coord_write.py call must include --summary, even if you also use --body or --body-file.
@@ -96,7 +102,7 @@ Coordination rules:
 - If content is long, write it through --body-file so it becomes an attachment.
 - Before done, publish a design document and attach it.
 - If /consensus is active, you MUST explicitly ack the final decision before ending.
-- Read TEAM.md for team members and .agents/coord/protocol.md for full protocol.`;
+- Read ${cd}/TEAM.md for team members and ${cd}/protocol.md for full protocol.`;
 }
 
 function resolveDefaultSessionMode(member: ICreateAgentTeamInput['members'][number]): string {
@@ -141,7 +147,7 @@ export class AgentTeamService {
     const memberDefs = input.members.map((m) => ({ ...m, memberId: uuid() }));
 
     // Ensure workspace with coord assets, TEAM.md, protocol.md, SKILL.md
-    await this.ensureTeamWorkspace(coordDir, workspace, teamName, memberDefs);
+    await this.ensureTeamWorkspace(coordDir, workspace, teamName, memberDefs, teamId);
 
     const memberConversations = await Promise.all(
       memberDefs.map((member) => this.createMemberConversation(member, workspace, customWorkspace, teamId, teamName, coordDir))
@@ -195,10 +201,11 @@ export class AgentTeamService {
     // Start coord dispatcher for this team
     this.startDispatcher(teamConversation);
 
-    if (input.initialMessage?.trim()) {
+    if (input.initialMessage?.trim() || (input.initialFiles && input.initialFiles.length > 0)) {
       await this.sendMessage({
         conversationId: teamConversation.id,
-        input: input.initialMessage.trim(),
+        input: input.initialMessage?.trim() || '',
+        files: input.initialFiles,
       });
     }
 
@@ -284,8 +291,29 @@ export class AgentTeamService {
   async sendMessage(input: IAgentTeamSendMessageInput): Promise<ICoordTimelineEntry> {
     const team = await this.getResolvedTeam(input.conversationId);
     const isConsensus = input.input.trim().startsWith('/consensus');
+    const msgId = input.msgId || uuid();
+
+    // Copy files to coord attachments
+    let attachedFiles: string[] | undefined;
+    if (input.files && input.files.length > 0) {
+      const attachmentsDir = path.join(team.teamConversation.extra.coordDir, 'attachments');
+      await fs.mkdir(attachmentsDir, { recursive: true });
+      attachedFiles = [];
+      for (const filePath of input.files) {
+        try {
+          const fileName = `${msgId}-${path.basename(filePath)}`;
+          const dest = path.join(attachmentsDir, fileName);
+          await fs.copyFile(filePath, dest);
+          attachedFiles.push(dest);
+        } catch {
+          // Skip files that can't be copied
+        }
+      }
+      if (attachedFiles.length === 0) attachedFiles = undefined;
+    }
+
     const entry: ICoordTimelineEntry = {
-      id: input.msgId || uuid(),
+      id: msgId,
       ts: new Date().toISOString(),
       from: 'user',
       role: 'user',
@@ -296,6 +324,7 @@ export class AgentTeamService {
       task_id: team.teamConversation.id,
       dispatch: 'all',
       to: ['*'],
+      files: attachedFiles,
     };
 
     const messagesPath = path.join(team.teamConversation.extra.coordDir, 'messages.jsonl');
@@ -394,6 +423,7 @@ export class AgentTeamService {
     workspace: string,
     teamName: string,
     memberDefs: Array<{ name: string; type: string; backend?: string; memberId: string }>,
+    teamId: string,
   ): Promise<void> {
     // Coord runtime directories
     await fs.mkdir(path.join(coordDir, 'scripts'), { recursive: true });
@@ -401,11 +431,23 @@ export class AgentTeamService {
     await fs.mkdir(path.join(coordDir, 'locks'), { recursive: true });
     await fs.mkdir(path.join(coordDir, 'state'), { recursive: true });
 
-    // Skill directories for CLI discovery
-    const claudeSkillDir = path.join(workspace, '.claude', 'skills', 'coord-protocol');
-    const geminiSkillDir = path.join(workspace, '.gemini', 'skills', 'coord-protocol');
-    await fs.mkdir(claudeSkillDir, { recursive: true });
-    await fs.mkdir(geminiSkillDir, { recursive: true });
+    // Clean up legacy root-level discovery skill files (from before team-level isolation)
+    for (const legacyDir of [
+      path.join(workspace, '.claude', 'skills', 'coord-protocol'),
+      path.join(workspace, '.gemini', 'skills', 'coord-protocol'),
+    ]) {
+      try {
+        await fs.rm(legacyDir, { recursive: true, force: true });
+      } catch {
+        // Ignore if doesn't exist
+      }
+    }
+    // Also clean up legacy root-level TEAM.md
+    try {
+      await fs.unlink(path.join(workspace, 'TEAM.md'));
+    } catch {
+      // Ignore
+    }
 
     // messages.jsonl (append-only, don't overwrite)
     await fs.writeFile(path.join(coordDir, 'messages.jsonl'), '', { flag: 'a' });
@@ -413,13 +455,14 @@ export class AgentTeamService {
     // protocol.md — formal coordination protocol
     await this.writeIfChanged(path.join(coordDir, 'protocol.md'), generateProtocolMd());
 
-    // TEAM.md — team roster at workspace root
-    await fs.writeFile(path.join(workspace, 'TEAM.md'), generateTeamMd(teamName, memberDefs), 'utf-8');
+    // TEAM.md — inside team coord dir (not workspace root, to avoid multi-team overwrite)
+    await fs.writeFile(path.join(coordDir, 'TEAM.md'), generateTeamMd(teamName, memberDefs, teamId), 'utf-8');
 
-    // SKILL.md — agent operation entry for Claude and Gemini CLI
-    const skillContent = generateSkillMd();
-    await fs.writeFile(path.join(claudeSkillDir, 'SKILL.md'), skillContent, 'utf-8');
-    await fs.writeFile(path.join(geminiSkillDir, 'SKILL.md'), skillContent, 'utf-8');
+    // SKILL.md — per-team skill inside coord dir only (not workspace root CLI discovery dirs,
+    // because multi-team on same workspace would overwrite each other. presetPrompt already
+    // points agents to the correct team-specific paths.)
+    const skillContent = generateSkillMd(teamId);
+    await fs.writeFile(path.join(coordDir, 'SKILL.md'), skillContent, 'utf-8');
 
     // Write coord scripts into workspace (embedded, no external dependency)
     await this.writeCoordScripts(coordDir);
@@ -455,6 +498,7 @@ export class AgentTeamService {
         backend: member.backend,
         memberId: member.memberId,
       })),
+      teamConversation.id,
     );
   }
 
@@ -466,7 +510,7 @@ export class AgentTeamService {
     teamName: string,
     coordDir: string,
   ): Promise<Extract<TChatConversation, { type: 'gemini' }> | Extract<TChatConversation, { type: 'acp' }>> {
-    const presetPrompt = generatePresetPrompt(teamName, member.name, member.memberId);
+    const presetPrompt = generatePresetPrompt(teamName, member.name, member.memberId, teamId);
 
     if (member.type === 'gemini') {
       const geminiConversation = await createGeminiAgent(
@@ -542,10 +586,10 @@ Goals:
 
 ## Files
 
-- Message stream: \`.agents/coord/messages.jsonl\`
-- Attachments: \`.agents/coord/attachments/\`
-- Reader state: \`.agents/coord/state/<agent_id>.cursor.json\`
-- Locks: \`.agents/coord/locks/<lock_key>.json\`
+- Message stream: \`.agents/teams/<teamId>/coord/messages.jsonl\`
+- Attachments: \`.agents/teams/<teamId>/coord/attachments/\`
+- Reader state: \`.agents/teams/<teamId>/coord/state/<agent_id>.cursor.json\`
+- Locks: \`.agents/teams/<teamId>/coord/locks/<lock_key>.json\`
 
 ## Roles
 
@@ -676,7 +720,7 @@ Minimum design document content:
 
 Recommended path format:
 
-- \`.agents/coord/attachments/design-<task_id>-<agent_id>.md\`
+- \`.agents/teams/<teamId>/coord/attachments/design-<task_id>-<agent_id>.md\`
 
 The completion message should either:
 

@@ -27,6 +27,7 @@ export interface ICoordTimelineEntry {
   dispatch?: 'all' | 'targets' | 'none';
   /** Target member IDs for dispatch=targets, or ['*'] for all, or ['user'] for none */
   to?: string[];
+  files?: string[];
 }
 
 export interface IAgentTeamMemberInput {
@@ -50,6 +51,7 @@ export interface ICreateAgentTeamInput {
   defaultView?: AgentTeamDefaultView;
   members: IAgentTeamMemberInput[];
   initialMessage?: string;
+  initialFiles?: string[];
 }
 
 export interface IAgentTeamCreateResult {
@@ -61,6 +63,7 @@ export interface IAgentTeamSendMessageInput {
   conversationId: string;
   input: string;
   msgId?: string;
+  files?: string[];
 }
 
 export interface IResolvedAgentTeam {
