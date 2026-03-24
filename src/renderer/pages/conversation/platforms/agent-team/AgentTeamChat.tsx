@@ -587,7 +587,9 @@ export default function AgentTeamChat({ conversation_id, workspace }: AgentTeamC
                 options={mentionSuggestions.map((m) => ({
                   key: m.name,
                   label: m.name,
-                  type: m.type,
+                  tokens: new Set([m.name.toLowerCase()]),
+                  avatar: undefined as string | undefined,
+                  avatarImage: undefined as string | undefined,
                   logo: getAgentLogo(m.backend || m.type) || undefined,
                 }))}
                 selectedKey={mentionSuggestions[mentionIndex]?.name || ''}
@@ -666,10 +668,10 @@ function AgentsMembersView({ conversation_id }: { conversation_id: string }) {
           const logoSrc = getAgentLogo(member.backend || member.type);
           return (
             <div
-              key={member.id}
+              key={member.conversationId || member.memberId}
               className={styles.memberCard}
               onClick={() => {
-                navigate(`/conversation/${member.id}`);
+                navigate(`/conversation/${member.conversationId}`);
               }}
             >
               {logoSrc && <img src={logoSrc} alt='' className={styles.memberLogo} />}
