@@ -287,52 +287,42 @@ export const useMessageLstCache = (key: string) => {
   useEffect(() => {
     if (!key) return;
     let cancelled = false;
-    const timers: NodeJS.Timeout[] = [];
-
-    const loadMessages = () => {
-      void ipcBridge.database.getConversationMessages
-        .invoke({
-          conversation_id: key,
-          page: 0,
-          pageSize: 10000, // Load latest 10k messages to avoid truncating the newest history
-          order: 'DESC',
-        })
-        .then((messages) => {
-          if (cancelled || !messages || !Array.isArray(messages)) {
-            return;
-          }
-          const normalizedMessages = [...messages].reverse();
-          // Merge DB messages with any real-time streaming messages already in the list.
-          // This prevents a race condition where streaming messages (added via IPC before
-          // the DB load completes) could cause DB-only messages to be lost.
-          update((currentList) => {
-            if (!currentList.length) return normalizedMessages;
-            const sameConversation = currentList.filter((m: TMessage) => m.conversation_id === key);
-            if (!sameConversation.length) return normalizedMessages;
-            const dbIds = new Set(normalizedMessages.map((m: TMessage) => m.id));
-            const dbMsgIds = new Set(normalizedMessages.map((m: TMessage) => m.msg_id).filter(Boolean));
-            const streamingOnly = sameConversation.filter(
-              (m) => !dbIds.has(m.id) && !(m.msg_id && dbMsgIds.has(m.msg_id))
-            );
-            if (!streamingOnly.length) return normalizedMessages;
-            return [...normalizedMessages, ...streamingOnly];
-          });
-        })
-        .catch((error) => {
-          if (!cancelled) {
-            console.error('[useMessageLstCache] Failed to load messages from database:', error);
-          }
+    void ipcBridge.database.getConversationMessages
+      .invoke({
+        conversation_id: key,
+        page: 0,
+        pageSize: 10000, // Load latest 10k messages to avoid truncating the newest history
+        order: 'DESC',
+      })
+      .then((messages) => {
+        if (cancelled || !messages || !Array.isArray(messages)) {
+          return;
+        }
+        const normalizedMessages = [...messages].reverse();
+        // Merge DB messages with any real-time streaming messages already in the list.
+        // This prevents a race condition where streaming messages (added via IPC before
+        // the DB load completes) could cause DB-only messages to be lost.
+        update((currentList) => {
+          if (!currentList.length) return normalizedMessages;
+          const sameConversation = currentList.filter((m: TMessage) => m.conversation_id === key);
+          if (!sameConversation.length) return normalizedMessages;
+          const dbIds = new Set(normalizedMessages.map((m: TMessage) => m.id));
+          const dbMsgIds = new Set(normalizedMessages.map((m: TMessage) => m.msg_id).filter(Boolean));
+          const streamingOnly = sameConversation.filter(
+            (m) => !dbIds.has(m.id) && !(m.msg_id && dbMsgIds.has(m.msg_id))
+          );
+          if (!streamingOnly.length) return normalizedMessages;
+          return [...normalizedMessages, ...streamingOnly];
         });
-    };
-
-    loadMessages();
-    for (const delay of [2500, 5000]) {
-      timers.push(setTimeout(() => { if (!cancelled) loadMessages(); }, delay));
-    }
+      })
+      .catch((error) => {
+        if (!cancelled) {
+          console.error('[useMessageLstCache] Failed to load messages from database:', error);
+        }
+      });
 
     return () => {
       cancelled = true;
-      timers.forEach(clearTimeout);
     };
   }, [key]);
 };
