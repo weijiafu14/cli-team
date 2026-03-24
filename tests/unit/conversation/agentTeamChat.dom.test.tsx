@@ -168,17 +168,22 @@ describe('AgentTeamChat recovery', () => {
     });
 
     // Mock a fake timeline entry with a very long body
-    mockRefs.getTimelineMock.mockResolvedValueOnce([
-      {
-        id: 'msg-long',
-        ts: '2026-03-24T12:00:00Z',
-        from: 'agent-1',
-        role: 'agent',
-        type: 'update',
-        summary: 'Long update',
-        body: 'very long content',
-      },
-    ]);
+    mockRefs.getTimelineMock.mockResolvedValueOnce({
+      success: true,
+      data: {
+        entries: [
+          {
+            id: 'msg-long',
+            ts: '2026-03-24T12:00:00Z',
+            from: 'agent-1',
+            role: 'agent',
+            type: 'update',
+            summary: 'Long update',
+            body: 'very long content',
+          },
+        ],
+      }
+    });
 
     render(<AgentTeamChat conversation_id='team-1' />);
 
