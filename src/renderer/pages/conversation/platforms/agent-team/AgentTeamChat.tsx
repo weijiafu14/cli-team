@@ -45,6 +45,76 @@ function getPathTailLabel(nextPath?: string): string {
   return parts[parts.length - 1] || nextPath;
 }
 
+function getTypeBadgeStyle(type: string) {
+  switch (type.toLowerCase()) {
+    case 'consensus':
+    case 'decision':
+      return { background: 'var(--color-danger-light-1)', color: 'var(--color-danger-6)' };
+    case 'finding':
+    case 'challenge':
+      return { background: 'var(--color-warning-light-1)', color: 'var(--color-warning-6)' };
+    case 'claim':
+    case 'done':
+      return { background: 'var(--color-success-light-1)', color: 'var(--color-success-6)' };
+    case 'ack':
+    case 'update':
+    default:
+      return { background: 'var(--color-fill-2)', color: 'var(--color-text-3)' };
+  }
+}
+
+const CollapsibleBody: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const [expanded, setExpanded] = useState(false);
+  const bodyRef = useRef<HTMLDivElement>(null);
+  const [isOverflowing, setIsOverflowing] = useState(false);
+
+  useEffect(() => {
+    if (bodyRef.current) {
+      setIsOverflowing(bodyRef.current.scrollHeight > 300);
+    }
+  }, [children]);
+
+  return (
+    <div className='relative'>
+      <div 
+        ref={bodyRef}
+        style={{ 
+          maxHeight: expanded ? 'none' : '300px', 
+          overflow: 'hidden',
+          transition: 'max-height 0.3s ease'
+        }}
+      >
+        {children}
+      </div>
+      {!expanded && isOverflowing && (
+        <div 
+          className='absolute bottom-0 left-0 right-0 h-80px flex items-end justify-center pb-8px'
+          style={{ background: 'linear-gradient(to bottom, transparent, var(--color-bg-2) 80%)' }}
+        >
+          <button 
+            type='button'
+            className='px-12px py-4px rd-16px text-12px bg-fill-2 hover:bg-fill-3 text-t-2 border-none cursor-pointer transition-colors shadow-sm'
+            onClick={() => setExpanded(true)}
+          >
+            Show more
+          </button>
+        </div>
+      )}
+      {expanded && isOverflowing && (
+        <div className='flex justify-center mt-8px'>
+          <button 
+            type='button'
+            className='px-12px py-4px rd-16px text-12px bg-fill-2 hover:bg-fill-3 text-t-2 border-none cursor-pointer transition-colors'
+            onClick={() => setExpanded(false)}
+          >
+            Show less
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function mergeTimelineEntries(
   prev: ICoordTimelineEntry[],
   incoming: ICoordTimelineEntry | ICoordTimelineEntry[]
@@ -356,16 +426,30 @@ export default function AgentTeamChat({ conversation_id, workspace }: AgentTeamC
     <ConversationProvider value={{ conversationId: conversation_id, workspace, type: 'agent-team' }}>
       <div className={styles.container}>
         <div className={styles.header}>
-          <div className={styles.headerCopy}>
+          <div className='flex items-center gap-16px flex-1 min-w-0'>
             <div className={styles.headerTitle}>
-              Agent Team Room
+              Agent Team Room <span className='text-13px text-t-3 font-normal ml-8px'>· {workspaceLabel}</span>
             </div>
-            <div className={styles.headerSubtitle}>
-              <span className={styles.headerWorkspace}>{workspaceLabel}</span>
-              {latestActor && `· Latest movement from ${latestActor}`}
+            
+            <div className={styles.tabBar} style={{ padding: 0, border: 'none', marginLeft: '24px' }}>
+              <button
+                type='button'
+                className={`${styles.tab} ${activeTab === 'timeline' ? styles.tabActive : ''}`}
+                onClick={() => setActiveTab('timeline')}
+              >
+                Timeline
+              </button>
+              <button
+                type='button'
+                className={`${styles.tab} ${activeTab === 'agents' ? styles.tabActive : ''}`}
+                onClick={() => setActiveTab('agents')}
+              >
+                Team Roster
+              </button>
             </div>
           </div>
-          <div className={styles.headerStats}>
+
+          <div className={styles.headerStats} style={{ marginLeft: 'auto' }}>
             <div className={styles.headerStat}>
               <span className={styles.headerStatValue}>{timelineCount}</span>
               <span className={styles.headerStatLabel}>Entries</span>
@@ -375,22 +459,6 @@ export default function AgentTeamChat({ conversation_id, workspace }: AgentTeamC
               <span className={styles.headerStatLabel}>Agents</span>
             </div>
           </div>
-        </div>
-        <div className={styles.tabBar}>
-          <button
-            type='button'
-            className={`${styles.tab} ${activeTab === 'timeline' ? styles.tabActive : ''}`}
-            onClick={() => setActiveTab('timeline')}
-          >
-            Timeline
-          </button>
-          <button
-            type='button'
-            className={`${styles.tab} ${activeTab === 'agents' ? styles.tabActive : ''}`}
-            onClick={() => setActiveTab('agents')}
-          >
-            Team Roster
-          </button>
         </div>
 
         {activeTab === 'timeline' ? (
@@ -427,14 +495,16 @@ export default function AgentTeamChat({ conversation_id, workspace }: AgentTeamC
                         </div>
                       )}
                       <span className={styles.entryFrom}>{displayName}</span>
-                      <span className={styles.entryType}>{entry.type}</span>
+                      <span className={styles.entryType} style={getTypeBadgeStyle(entry.type)}>{entry.type}</span>
                       {dispatchLabel && <span className={styles.entryDispatch}>{dispatchLabel}</span>}
                       <span className={styles.entryTime}>{new Date(entry.ts).toLocaleTimeString()}</span>
                     </div>
                     <div className={styles.entrySummary}>{entry.summary}</div>
                     {entry.body && (
                       <div className={styles.entryBody}>
-                        <MarkdownView>{entry.body}</MarkdownView>
+                        <CollapsibleBody>
+                          <MarkdownView>{entry.body}</MarkdownView>
+                        </CollapsibleBody>
                       </div>
                     )}
                     {imagePaths.length > 0 && (
@@ -513,7 +583,7 @@ export default function AgentTeamChat({ conversation_id, workspace }: AgentTeamC
             onSend={handleSend}
             loading={sending}
             disabled={sending}
-            placeholder='Direct the team...'
+            placeholder='输入 @ 指定分配工作，或直接发送消息给全队...'
             defaultMultiLine
             onFilesAdded={handleFilesAdded}
             tools={
