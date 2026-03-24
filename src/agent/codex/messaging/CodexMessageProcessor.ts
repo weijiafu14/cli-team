@@ -9,6 +9,7 @@ import type { TMessage } from '@/common/chatLib';
 import type { CodexEventMsg } from '@/common/codex/types';
 import type { ICodexMessageEmitter } from '@/agent/codex/messaging/CodexMessageEmitter';
 import { ERROR_CODES, globalErrorService } from '@/agent/codex/core/ErrorService';
+import { getDatabase } from '@process/database';
 import { hasCronCommands } from '@process/task/CronCommandDetector';
 import { processCronInMessage } from '@process/task/MessageMiddleware';
 import { cronBusyGuard } from '@process/services/cron/CronBusyGuard';
@@ -19,6 +20,8 @@ export class CodexMessageProcessor {
   private deltaTimeout: NodeJS.Timeout | null = null;
   private reasoningMsgId: string | null = null;
   private currentReason: string = '';
+  private currentStreamedContent = '';
+  private hasPersistedStreamingMessage = false;
 
   constructor(
     private conversation_id: string,
@@ -29,6 +32,8 @@ export class CodexMessageProcessor {
     this.currentLoadingId = uuid();
     this.reasoningMsgId = uuid();
     this.currentReason = '';
+    this.currentStreamedContent = '';
+    this.hasPersistedStreamingMessage = false;
   }
 
   processReasonSectionBreak() {
@@ -39,6 +44,8 @@ export class CodexMessageProcessor {
     this.currentLoadingId = null;
     this.reasoningMsgId = null;
     this.currentReason = '';
+    this.currentStreamedContent = '';
+    this.hasPersistedStreamingMessage = false;
 
     // Mark conversation as no longer processing
     // This is the reliable completion point for Codex message flow
@@ -85,7 +92,15 @@ export class CodexMessageProcessor {
   }
 
   processMessageDelta(msg: Extract<CodexEventMsg, { type: 'agent_message_delta' }>) {
+    if (!this.currentLoadingId) {
+      this.currentLoadingId = uuid();
+      this.hasPersistedStreamingMessage = false;
+    }
     const rawDelta = msg.delta;
+    this.currentStreamedContent += rawDelta;
+
+    this.upsertStreamingSnapshot(this.buildStreamingTextMessage(this.currentStreamedContent, 'pending'));
+
     const deltaMessage = {
       type: 'content' as const,
       conversation_id: this.conversation_id,
@@ -98,22 +113,15 @@ export class CodexMessageProcessor {
   }
 
   processFinalMessage(msg: Extract<CodexEventMsg, { type: 'agent_message' }>) {
-    // Final message: only persist to database, do NOT emit to frontend
-    // Frontend has already shown the content via deltas
-
-    const transformedMessage: TMessage = {
-      id: this.currentLoadingId || uuid(),
-      msg_id: this.currentLoadingId,
-      type: 'text' as const,
-      position: 'left' as const,
-      conversation_id: this.conversation_id,
-      content: { content: msg.message },
-      status: 'finish', // Mark as finished for cron detection
-      createdAt: Date.now(),
-    };
-
-    // Use messageEmitter to persist, maintaining architecture separation
-    this.messageEmitter.persistMessage(transformedMessage);
+    if (!this.currentLoadingId) {
+      this.currentLoadingId = uuid();
+      this.hasPersistedStreamingMessage = false;
+    }
+    // Final message: keep DB in sync with the streamed text snapshot, but still
+    // avoid re-emitting to the active frontend because it has already rendered deltas.
+    this.currentStreamedContent = msg.message;
+    const transformedMessage = this.buildStreamingTextMessage(msg.message, 'finish');
+    this.upsertStreamingSnapshot(transformedMessage);
 
     // Process cron commands in final message
     // This is the reliable point to detect cron commands since we have the complete message text
@@ -138,6 +146,34 @@ export class CodexMessageProcessor {
           void this.messageEmitter.sendMessageToAgent(feedbackMessage);
         }
       });
+    }
+  }
+
+  private buildStreamingTextMessage(content: string, status: 'pending' | 'finish'): TMessage {
+    return {
+      id: this.currentLoadingId || uuid(),
+      msg_id: this.currentLoadingId,
+      type: 'text',
+      position: 'left',
+      conversation_id: this.conversation_id,
+      content: { content },
+      status,
+      createdAt: Date.now(),
+    };
+  }
+
+  private upsertStreamingSnapshot(message: TMessage): void {
+    const db = getDatabase();
+    if (this.hasPersistedStreamingMessage && this.currentLoadingId) {
+      const updated = db.updateMessage(this.currentLoadingId, message);
+      if (updated.success && updated.data) {
+        return;
+      }
+    }
+
+    const inserted = db.insertMessage(message);
+    if (inserted.success) {
+      this.hasPersistedStreamingMessage = true;
     }
   }
 
