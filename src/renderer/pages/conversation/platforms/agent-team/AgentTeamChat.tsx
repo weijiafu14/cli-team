@@ -19,6 +19,8 @@ import type { FileMetadata } from '@/renderer/services/FileService';
 import { useNavigate } from 'react-router-dom';
 import { PauseOne, SettingConfig } from '@icon-park/react';
 import { Image } from '@arco-design/web-react';
+import MentionDropdown from '@/renderer/pages/guid/components/MentionDropdown';
+import type { MentionOption } from '@/renderer/pages/guid/types';
 import styles from './AgentTeamChat.module.css';
 
 type AgentTeamChatProps = {
@@ -478,26 +480,18 @@ export default function AgentTeamChat({ conversation_id, workspace }: AgentTeamC
 
         <div className={styles.inputArea}>
           {mentionSuggestions.length > 0 && mentionQuery !== null && (
-            <div className={styles.mentionPopover}>
-              {mentionSuggestions.map((m, idx) => {
-                const logoSrc = getAgentLogo(m.backend || m.type);
-                return (
-                  <button
-                    key={m.memberId}
-                    type='button'
-                    className={`${styles.mentionItem} ${idx === mentionIndex ? styles.mentionItemActive : ''}`}
-                    onMouseDown={(e) => {
-                      e.preventDefault();
-                      insertMention(m.name);
-                    }}
-                    onMouseEnter={() => setMentionIndex(idx)}
-                  >
-                    {logoSrc && <img src={logoSrc} alt='' className={styles.mentionLogo} />}
-                    <span>{m.name}</span>
-                    <span className={styles.mentionBackend}>{m.backend || m.type}</span>
-                  </button>
-                );
-              })}
+            <div className='absolute bottom-100% mb-8px left-20px z-10 w-240px'>
+              <MentionDropdown
+                menuRef={{ current: null } as any}
+                options={mentionSuggestions.map((m) => ({
+                  key: m.name,
+                  label: m.name,
+                  type: m.type,
+                  logo: getAgentLogo(m.backend || m.type) || undefined,
+                }))}
+                selectedKey={mentionSuggestions[mentionIndex]?.name || ''}
+                onSelect={(key) => insertMention(key)}
+              />
             </div>
           )}
           {pendingFiles.length > 0 && (
