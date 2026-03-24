@@ -499,13 +499,15 @@ export default function AgentTeamChat({ conversation_id, workspace }: AgentTeamC
                         </React.Fragment>
                       ))}
                     </div>
-                    {entry.body && (
+                    {(entry as any).attachment?.path ? (
+                      <MarkdownAttachment key={(entry as any).attachment.path} path={(entry as any).attachment.path} onReady={handleRichContentReady} />
+                    ) : entry.body ? (
                       <div className={styles.entryBody}>
                         <CollapsibleBody>
                           <MarkdownView>{entry.body}</MarkdownView>
                         </CollapsibleBody>
                       </div>
-                    )}
+                    ) : null}
                     {imagePaths.length > 0 && (
                       <div className={styles.entryImages}>
                         {imagePaths.map((imagePath) => (
