@@ -73,6 +73,16 @@ export class CoordDispatcher {
     this.memberStates.clear();
   }
 
+  /** Abort all running member agents: kill tasks, clear queues, reset busy states */
+  abortAll(): void {
+    for (const state of this.memberStates.values()) {
+      state.pendingMessages = [];
+      state.busy = false;
+      this.workerTaskManager.kill(state.member.conversationId);
+    }
+    this.stopBusyPolling();
+  }
+
   private handleNewMessages(messages: ICoordTimelineEntry[]): void {
     for (const msg of messages) {
       // Determine target members
@@ -228,6 +238,15 @@ export class CoordDispatcher {
       .find(({ entry }) => entry.type === 'consensus')?.index;
 
     if (consensusIndex === undefined) {
+      state.lastConsensusSignature = undefined;
+      return;
+    }
+
+    // If user sent a new message after the consensus, the consensus is superseded — stop enforcing it
+    const hasUserMessageAfterConsensus = timeline
+      .slice(consensusIndex + 1)
+      .some((entry) => entry.role === 'user');
+    if (hasUserMessageAfterConsensus) {
       state.lastConsensusSignature = undefined;
       return;
     }
