@@ -668,10 +668,10 @@ function AgentsMembersView({ conversation_id }: { conversation_id: string }) {
           const logoSrc = getAgentLogo(member.backend || member.type);
           return (
             <div
-              key={member.conversationId || member.memberId}
+              key={member.id}
               className={styles.memberCard}
               onClick={() => {
-                navigate(`/conversation/${member.conversationId}`);
+                navigate(`/conversation/${member.id}`);
               }}
             >
               {logoSrc && <img src={logoSrc} alt='' className={styles.memberLogo} />}
