@@ -114,8 +114,8 @@ export function useAutoScroll({ messages, itemCount }: UseAutoScrollOptions): Us
     const lastMessage = messages[messages.length - 1];
 
     // User sent a message - force scroll regardless of userScrolled state
-    // Also force scroll on initial load (0 -> N messages)
-    if (lastMessage?.position === 'right' || (prevLength === 0 && currentListLength > 0)) {
+    // Also force scroll on initial load (0 -> N messages) or if user hasn't scrolled up
+    if (lastMessage?.position === 'right' || !userScrolledRef.current || (prevLength === 0 && currentListLength > 0)) {
       userScrolledRef.current = false;
       // Use double RAF to ensure DOM is updated before scrolling (#977)
       // 使用双 RAF 确保 DOM 更新后再滚动
