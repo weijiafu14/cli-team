@@ -523,33 +523,9 @@ export class AgentTeamService {
 
   private async writeCoordScripts(coordDir: string, teamId: string): Promise<void> {
     const scriptsDst = path.join(coordDir, 'scripts');
-    const relCoordDir = getRelativeCoordDir(teamId);
-    // Inject team-specific default paths into scripts so agents can't accidentally
-    // write to the wrong team's messages.jsonl (the root cause of "sending to wrong group")
-    const readScript = EMBEDDED_COORD_READ_PY
-      .replace(
-        `required=True, help="Path to messages.jsonl (required to prevent reading wrong team)")`,
-        `default="${relCoordDir}/messages.jsonl")`
-      )
-      .replace(
-        `required=True, help="Path to state directory (required)")`,
-        `default="${relCoordDir}/state")`
-      );
-    const writeScript = EMBEDDED_COORD_WRITE_PY
-      .replace(
-        `required=True, help="Path to messages.jsonl (required to prevent writing to wrong team)")`,
-        `default="${relCoordDir}/messages.jsonl")`
-      )
-      .replace(
-        `required=True, help="Path to attachments directory (required)")`,
-        `default="${relCoordDir}/attachments")`
-      )
-      .replace(
-        `required=True, help="Path to locks directory (required)")`,
-        `default="${relCoordDir}/locks")`
-      );
-    await this.writeIfChanged(path.join(scriptsDst, 'coord_read.py'), readScript);
-    await this.writeIfChanged(path.join(scriptsDst, 'coord_write.py'), writeScript);
+    // Write scripts directly with required=True to enforce strict path explicit passing
+    await this.writeIfChanged(path.join(scriptsDst, 'coord_read.py'), EMBEDDED_COORD_READ_PY);
+    await this.writeIfChanged(path.join(scriptsDst, 'coord_write.py'), EMBEDDED_COORD_WRITE_PY);
   }
 
   private async syncTeamWorkspaceAssets(teamConversation: Extract<TChatConversation, { type: 'agent-team' }>): Promise<void> {
