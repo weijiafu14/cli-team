@@ -169,7 +169,9 @@ function MarkdownAttachment({ path: filePath, onReady }: { path: string; onReady
   if (content === null) return null;
   return (
     <div className={styles.entryBody}>
-      <MarkdownView>{content}</MarkdownView>
+      <CollapsibleBody>
+        <MarkdownView>{content}</MarkdownView>
+      </CollapsibleBody>
     </div>
   );
 }
@@ -489,7 +491,14 @@ export default function AgentTeamChat({ conversation_id, workspace }: AgentTeamC
                       {dispatchLabel && <span className={styles.entryDispatch}>{dispatchLabel}</span>}
                       <span className={styles.entryTime}>{new Date(entry.ts).toLocaleTimeString()}</span>
                     </div>
-                    <div className={styles.entrySummary}>{entry.summary}</div>
+                    <div className={styles.entrySummary}>
+                      {entry.summary.split(/\\n|\n/).map((line, idx, arr) => (
+                        <React.Fragment key={idx}>
+                          {line}
+                          {idx < arr.length - 1 && <br />}
+                        </React.Fragment>
+                      ))}
+                    </div>
                     {entry.body && (
                       <div className={styles.entryBody}>
                         <CollapsibleBody>
