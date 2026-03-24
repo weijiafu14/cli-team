@@ -38,13 +38,14 @@ export function initAgentTeamBridge(agentTeamService: AgentTeamService): void {
     }
   });
 
-  ipcBridge.agentTeam.sendMessage.provider(async ({ conversation_id, input, msg_id, files }) => {
+  ipcBridge.agentTeam.sendMessage.provider(async ({ conversation_id, input, msg_id, files, targets }) => {
     try {
       const entry = await agentTeamService.sendMessage({
         conversationId: conversation_id,
         input,
         msgId: msg_id,
         files,
+        targets,
       });
       // Emit timeline update so frontend sees the message immediately
       ipcBridge.agentTeam.timelineStream.emit({ conversation_id, entry });
@@ -67,6 +68,16 @@ export function initAgentTeamBridge(agentTeamService: AgentTeamService): void {
     try {
       const conversations = await agentTeamService.getMembers(conversation_id);
       return { success: true, data: { conversations } };
+    } catch (error) {
+      return { success: false, msg: error instanceof Error ? error.message : String(error) };
+    }
+  });
+
+  ipcBridge.agentTeam.abort.provider(async ({ conversation_id }) => {
+    try {
+      const entry = await agentTeamService.abortTeam(conversation_id);
+      ipcBridge.agentTeam.timelineStream.emit({ conversation_id, entry });
+      return { success: true };
     } catch (error) {
       return { success: false, msg: error instanceof Error ? error.message : String(error) };
     }

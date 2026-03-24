@@ -99,6 +99,8 @@ export interface ICoordTimelineEntry {
   to?: string[];
   /** Persisted team attachment paths copied into coord/attachments */
   files?: string[];
+  /** Image file paths attached by agents for inline display */
+  images?: string[];
   /** Message ID being replied to (required for consensus ACK) */
   reply_to?: string;
 }
@@ -137,6 +139,8 @@ export interface IAgentTeamSendMessageParams {
   input: string;
   msg_id?: string;
   files?: string[];
+  /** Target member IDs for selective wakeup (@mention). When set, only these agents are woken. */
+  targets?: string[];
 }
 
 export const agentTeam = {
@@ -151,6 +155,7 @@ export const agentTeam = {
     'agent-team.get-members'
   ),
   timelineStream: bridge.buildEmitter<{ conversation_id: string; entry: ICoordTimelineEntry }>('agent-team.timeline'),
+  abort: bridge.buildProvider<IBridgeResponse, { conversation_id: string }>('agent-team.abort'),
 };
 
 // Gemini对话相关接口 - 复用统一的conversation接口

@@ -81,6 +81,78 @@ function hasGoogleOAuthCredentials(): boolean {
   }
 }
 
+/**
+ * Extract Gemini API Content[] from a native session file's conversation object.
+ * Session files contain messages with toolCalls[].name/args/result[].functionResponse.
+ */
+function extractContentFromSessionFile(conversation: unknown): Array<{ role: string; parts: unknown[] }> {
+  const conv = conversation as { messages?: Array<Record<string, unknown>> };
+  if (!conv?.messages) return [];
+
+  const contents: Array<{ role: string; parts: unknown[] }> = [];
+
+  for (const msg of conv.messages) {
+    const type = msg.type as string;
+    const rawContent = msg.content;
+    const toolCalls = msg.toolCalls as Array<{
+      name: string;
+      args: Record<string, unknown>;
+      result?: Array<{ functionResponse: { name: string; response: { output: string } } }>;
+    }> | undefined;
+
+    if (type === 'user' && rawContent) {
+      // content can be string or parts array [{text: "..."}]
+      if (typeof rawContent === 'string') {
+        contents.push({ role: 'user', parts: [{ text: rawContent }] });
+      } else if (Array.isArray(rawContent)) {
+        contents.push({ role: 'user', parts: rawContent });
+      }
+    } else if (type === 'gemini') {
+      if (rawContent) {
+        if (typeof rawContent === 'string') {
+          contents.push({ role: 'model', parts: [{ text: rawContent }] });
+        } else if (Array.isArray(rawContent)) {
+          contents.push({ role: 'model', parts: rawContent });
+        }
+      }
+      if (toolCalls && toolCalls.length > 0) {
+        // Model turn: functionCall parts
+        const callParts: unknown[] = [];
+        const responseParts: unknown[] = [];
+
+        for (const tc of toolCalls) {
+          if (!tc.name) continue;
+          callParts.push({
+            functionCall: {
+              name: tc.name,
+              args: tc.args || {},
+              ...((tc as any).id ? { id: (tc as any).id } : {}),
+            },
+          });
+
+          // Collect all result parts (functionResponse, text, inlineData, etc.)
+          if (tc.result) {
+            for (const r of tc.result) {
+              // Transparently pass through all parts — they're already in Gemini API format
+              responseParts.push(r);
+            }
+          }
+        }
+
+        // Add function call and response turns if we have any complete data
+        if (callParts.length > 0) {
+          contents.push({ role: 'model', parts: callParts });
+        }
+        if (responseParts.length > 0) {
+          contents.push({ role: 'user', parts: responseParts });
+        }
+      }
+    }
+  }
+
+  return contents;
+}
+
 interface GeminiAgent2Options {
   workspace: string;
   proxy?: string;
@@ -98,6 +170,17 @@ interface GeminiAgent2Options {
   skillsDir?: string;
   /** 启用的 skills 列表，用于过滤 SkillManager 中的 skills / Enabled skills list for filtering skills in SkillManager */
   enabledSkills?: string[];
+  /** Persistent session ID for native session resume. When provided, aioncli-core
+   *  will reuse the same session file on disk instead of creating a new one each time. */
+  persistentSessionId?: string;
+  /** Saved session data from a previous run for true native resume.
+   *  Contains { conversation, filePath } from ChatRecordingService. */
+  resumedSessionData?: { conversation: unknown; filePath: string };
+}
+
+export interface GeminiSessionInfo {
+  sessionId: string;
+  conversationFilePath: string | null;
 }
 
 export class GeminiAgent {
@@ -130,6 +213,10 @@ export class GeminiAgent {
   private skillsDir?: string;
   /** 启用的 skills 列表 / Enabled skills list */
   private enabledSkills?: string[];
+  /** Persistent session ID for native resume */
+  private persistentSessionId?: string;
+  /** Saved session data for native resume */
+  private resumedSessionData?: { conversation: unknown; filePath: string };
   bootstrap: Promise<void>;
   static buildFileServer(workspace: string) {
     return new FileDiscoveryService(workspace);
@@ -149,6 +236,8 @@ export class GeminiAgent {
     this.presetRules = options.presetRules;
     this.skillsDir = options.skillsDir;
     this.enabledSkills = options.enabledSkills;
+    this.persistentSessionId = options.persistentSessionId;
+    this.resumedSessionData = options.resumedSessionData;
     // 向后兼容：优先使用 presetRules，其次 contextContent / Backward compatible: prefer presetRules, fallback to contextContent
     this.contextContent = options.contextContent || options.presetRules;
     this.initClientEnv();
@@ -344,11 +433,13 @@ export class GeminiAgent {
     await this.toolConfig.initializeForConversation(this.authType!);
 
     const extensions = loadExtensions(path);
+    const effectiveSessionId = this.persistentSessionId || sessionId;
+    console.log(`[GeminiAgent] Using sessionId: ${effectiveSessionId} (persistent=${!!this.persistentSessionId})`);
     this.config = await loadCliConfig({
       workspace: path,
       settings,
       extensions,
-      sessionId,
+      sessionId: effectiveSessionId,
       proxy: this.proxy,
       model: this.model.useModel,
       conversationToolConfig: this.toolConfig,
@@ -405,6 +496,19 @@ export class GeminiAgent {
     );
 
     this.geminiClient = this.config.getGeminiClient();
+
+    // Resume from saved session data if available
+    if (this.resumedSessionData) {
+      try {
+        // Extract Content[] from session file messages (they contain full toolCall name/args/functionResponse)
+        const history = extractContentFromSessionFile(this.resumedSessionData.conversation);
+        console.log(`[GeminiAgent] Resuming with ${history.length} Content entries from: ${this.resumedSessionData.filePath}`);
+        await this.geminiClient.resumeChat(history, this.resumedSessionData as any);
+        console.log('[GeminiAgent] Native session resume successful');
+      } catch (e) {
+        console.warn('[GeminiAgent] Native session resume failed, starting fresh:', e);
+      }
+    }
 
     // 在初始化时注入 presetRules 到 userMemory
     // Inject presetRules into userMemory at initialization
@@ -649,6 +753,12 @@ export class GeminiAgent {
           if (this.geminiClient) {
             compactToolResponsesInHistory(this.geminiClient);
           }
+          // Only emit finish when the agentic loop is truly done (no more tool calls).
+          // Do NOT emit finish in .finally() — that fires after every stream chunk,
+          // including mid-loop tool call completions, causing CoordDispatcher to
+          // release the busy gate prematurely and send wakeups that break
+          // function call/response pairing (API 400).
+          this.onStreamEvent({ type: 'finish', data: '', msg_id });
         }
       })
       .catch((e: unknown) => {
@@ -664,6 +774,8 @@ export class GeminiAgent {
           data: errorMessage,
           msg_id,
         });
+        // Emit finish after error so UI resets and CoordDispatcher releases busy gate
+        this.onStreamEvent({ type: 'finish', data: '', msg_id });
       });
   }
 
@@ -748,12 +860,10 @@ export class GeminiAgent {
             msg_id,
           });
         })
-        .finally(() => {
-          this.onStreamEvent({
-            type: 'finish',
-            data: '',
-            msg_id,
-          });
+        .catch((e2: unknown) => {
+          // Emit finish on unhandled errors so the UI doesn't stay in loading state
+          this.onStreamEvent({ type: 'finish', data: '', msg_id });
+          console.error('[GeminiAgent] Unhandled error in message handling:', e2);
         });
       return '';
     } catch (e) {
@@ -920,6 +1030,52 @@ export class GeminiAgent {
     } catch (e) {
       // ignore injection errors
     }
+  }
+
+  /**
+   * Resume chat with structured Gemini Content[] history via GeminiClient.resumeChat().
+   * This gives the model true multi-turn context instead of a text summary.
+   */
+  async resumeHistory(history: Array<{ role: 'user' | 'model'; parts: unknown[] }>): Promise<void> {
+    try {
+      if (!this.geminiClient) {
+        console.warn('[GeminiAgent] resumeHistory called but geminiClient is not initialized');
+        return;
+      }
+      if (!history || history.length === 0) {
+        console.log('[GeminiAgent] resumeHistory: empty history, skipping');
+        return;
+      }
+      console.log(`[GeminiAgent] resumeHistory: injecting ${history.length} Content entries`);
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any -- bridge @google/genai version mismatch
+      await this.geminiClient.resumeChat(history as any);
+      console.log('[GeminiAgent] resumeHistory: done');
+    } catch (e) {
+      console.error('[GeminiAgent] resumeHistory failed:', e);
+      // Don't throw — fallback to normal fresh session
+    }
+  }
+
+  /** Get native session info for persistence by the manager */
+  getSessionInfo(): GeminiSessionInfo {
+    const recording = this.geminiClient?.getChatRecordingService?.();
+    return {
+      sessionId: this.persistentSessionId || sessionId,
+      conversationFilePath: recording?.getConversationFilePath?.() ?? null,
+    };
+  }
+
+  /** Get the live Content[] history from GeminiChat for serialization */
+  getClientHistory(): unknown[] {
+    try {
+      const chat = (this.geminiClient as any)?.chat;
+      if (chat?.getHistory) {
+        return chat.getHistory();
+      }
+    } catch {
+      // ignore
+    }
+    return [];
   }
 }
 

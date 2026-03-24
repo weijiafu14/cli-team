@@ -28,6 +28,8 @@ export interface ICoordTimelineEntry {
   /** Target member IDs for dispatch=targets, or ['*'] for all, or ['user'] for none */
   to?: string[];
   files?: string[];
+  /** Image file paths attached by agents for inline display */
+  images?: string[];
   /** Message ID being replied to (required for consensus ACK) */
   reply_to?: string;
 }
@@ -66,6 +68,7 @@ export interface IAgentTeamSendMessageInput {
   input: string;
   msgId?: string;
   files?: string[];
+  targets?: string[];
 }
 
 export interface IResolvedAgentTeam {
