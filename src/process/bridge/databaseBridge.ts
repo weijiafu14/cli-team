@@ -12,9 +12,9 @@ import type { IConversationRepository } from '@process/database/IConversationRep
 
 export function initDatabaseBridge(repo: IConversationRepository): void {
   // Get conversation messages from database
-  ipcBridge.database.getConversationMessages.provider(({ conversation_id, page = 0, pageSize = 10000 }) => {
+  ipcBridge.database.getConversationMessages.provider(({ conversation_id, page = 0, pageSize = 10000, order }) => {
     try {
-      const result = repo.getMessages(conversation_id, page, pageSize);
+      const result = repo.getMessages(conversation_id, page, pageSize, order);
       return Promise.resolve(result.data);
     } catch (error) {
       console.error('[DatabaseBridge] Error getting conversation messages:', error);
