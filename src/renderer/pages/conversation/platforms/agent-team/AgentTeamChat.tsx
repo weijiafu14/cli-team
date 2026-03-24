@@ -71,21 +71,34 @@ const CollapsibleBody: React.FC<{ children: React.ReactNode }> = ({ children }) 
 
   useEffect(() => {
     if (!contentRef.current) return;
+    const el = contentRef.current;
+    
+    const checkOverflow = () => {
+      if (el.scrollHeight > 300) {
+        setIsOverflowing(true);
+      }
+    };
     
     // Check initially
-    setIsOverflowing(contentRef.current.scrollHeight > 300);
+    checkOverflow();
     
-    // Observe the inner content which can grow freely, so ResizeObserver reliably fires
-    const observer = new ResizeObserver((entries) => {
-      for (const entry of entries) {
-        setIsOverflowing(entry.target.scrollHeight > 300);
-      }
-    });
+    // 1. Observe size changes
+    const resizeObserver = new ResizeObserver(() => checkOverflow());
+    resizeObserver.observe(el);
     
-    observer.observe(contentRef.current);
+    // 2. Observe DOM mutations (useful for MarkdownView async rendering shadow DOM or inner HTML)
+    const mutationObserver = new MutationObserver(() => checkOverflow());
+    mutationObserver.observe(el, { childList: true, subtree: true, characterData: true, attributes: true });
+
+    // 3. Fallback polling for the first 2 seconds to catch any delayed image loads or complex math rendering
+    const intervalId = setInterval(checkOverflow, 200);
+    const timeoutId = setTimeout(() => clearInterval(intervalId), 2000);
     
     return () => {
-      observer.disconnect();
+      resizeObserver.disconnect();
+      mutationObserver.disconnect();
+      clearInterval(intervalId);
+      clearTimeout(timeoutId);
     };
   }, [children]);
 
