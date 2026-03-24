@@ -157,4 +157,34 @@ describe('AgentTeamChat recovery', () => {
     expect(screen.getByAltText('evidence.png')).toBeInTheDocument();
     expect(screen.getByTestId('file-preview')).toHaveTextContent('/tmp/log.txt');
   });
+
+  it('shows Show more button immediately when markdown body height expands asynchronously', async () => {
+    // Mock scrollHeight to trigger overflow after initial render
+    Object.defineProperty(HTMLElement.prototype, 'scrollHeight', {
+      configurable: true,
+      get() {
+        return this.textContent?.includes('very long content') ? 400 : 100;
+      },
+    });
+
+    // Mock a fake timeline entry with a very long body
+    mockRefs.getTimelineMock.mockResolvedValueOnce([
+      {
+        id: 'msg-long',
+        ts: '2026-03-24T12:00:00Z',
+        from: 'agent-1',
+        role: 'agent',
+        type: 'update',
+        summary: 'Long update',
+        body: 'very long content',
+      },
+    ]);
+
+    render(<AgentTeamChat conversation_id='team-1' />);
+
+    // Fast-forward or wait for the observers/intervals to catch the height
+    await waitFor(() => {
+      expect(screen.getByText('Show more')).toBeInTheDocument();
+    }, { timeout: 1000 });
+  });
 });
