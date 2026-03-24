@@ -29,16 +29,21 @@ class ConversationManageWithDB {
     Cache.set(conversation_id, manage);
     return manage;
   }
+  private timerRunning = false;
+
   sync(type: 'insert' | 'accumulate', message: TMessage) {
     this.stack.push([type, message]);
-    clearTimeout(this.timer);
     if (type === 'insert') {
       this.save2DataBase();
       return;
     }
-    this.timer = setTimeout(() => {
-      this.save2DataBase();
-    }, 2000);
+    if (!this.timerRunning) {
+      this.timerRunning = true;
+      this.timer = setTimeout(() => {
+        this.timerRunning = false;
+        this.save2DataBase();
+      }, 2000);
+    }
   }
 
   private save2DataBase() {
@@ -65,8 +70,11 @@ class ConversationManageWithDB {
         }
         executePendingCallbacks();
       })
-      .then(() => {
-        return new Promise((resolve) => {
+      .catch((error) => {
+        console.error('[Message] Database sync error:', error);
+      })
+      .finally(() => {
+        return new Promise<void>((resolve) => {
           const timer = setTimeout(() => {
             resolve();
             clearTimeout(timer);
