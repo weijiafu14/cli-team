@@ -65,23 +65,24 @@ function getTypeBadgeStyle(type: string) {
 
 const CollapsibleBody: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [expanded, setExpanded] = useState(false);
-  const bodyRef = useRef<HTMLDivElement>(null);
+  const wrapperRef = useRef<HTMLDivElement>(null);
+  const contentRef = useRef<HTMLDivElement>(null);
   const [isOverflowing, setIsOverflowing] = useState(false);
 
   useEffect(() => {
-    if (!bodyRef.current) return;
+    if (!contentRef.current) return;
     
     // Check initially
-    setIsOverflowing(bodyRef.current.scrollHeight > 300);
+    setIsOverflowing(contentRef.current.scrollHeight > 300);
     
-    // Use ResizeObserver to detect changes after async rendering (like Markdown images or syntax highlighting)
+    // Observe the inner content which can grow freely, so ResizeObserver reliably fires
     const observer = new ResizeObserver((entries) => {
       for (const entry of entries) {
         setIsOverflowing(entry.target.scrollHeight > 300);
       }
     });
     
-    observer.observe(bodyRef.current);
+    observer.observe(contentRef.current);
     
     return () => {
       observer.disconnect();
@@ -91,14 +92,16 @@ const CollapsibleBody: React.FC<{ children: React.ReactNode }> = ({ children }) 
   return (
     <div className='relative'>
       <div 
-        ref={bodyRef}
+        ref={wrapperRef}
         style={{ 
           maxHeight: expanded ? 'none' : '300px', 
           overflow: 'hidden',
           transition: 'max-height 0.3s ease'
         }}
       >
-        {children}
+        <div ref={contentRef}>
+          {children}
+        </div>
       </div>
       {!expanded && isOverflowing && (
         <div 
