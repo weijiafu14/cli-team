@@ -28,6 +28,19 @@ type GeminiPart =
   | { functionResponse: { name: string; response: { result: unknown } } };
 
 /**
+ * Exclude the in-flight message from DB history reconstruction.
+ * Without this, the current user message can enter Gemini twice:
+ * once via restored history and again as the live prompt being sent now.
+ */
+export function filterMessagesForGeminiHistory(messages: TMessage[], excludeMsgId?: string): TMessage[] {
+  if (!excludeMsgId) {
+    return messages;
+  }
+
+  return messages.filter((message) => message.id !== excludeMsgId && message.msg_id !== excludeMsgId);
+}
+
+/**
  * Map display name to real Gemini CLI tool name.
  * Only tools we can reliably reconstruct are included.
  */
@@ -95,9 +108,7 @@ function extractArgsFromToolItem(
 /**
  * Extract a string result from a tool_group item's resultDisplay.
  */
-function extractResultFromToolItem(
-  item: IMessageToolGroup['content'][number]
-): string {
+function extractResultFromToolItem(item: IMessageToolGroup['content'][number]): string {
   const rd = item.resultDisplay;
   if (!rd) return '';
   if (typeof rd === 'string') return rd;
@@ -112,9 +123,7 @@ function extractResultFromToolItem(
  * Check if a tool_group item has enough data to form a complete
  * functionCall/functionResponse pair.
  */
-function isToolItemComplete(
-  item: IMessageToolGroup['content'][number]
-): boolean {
+function isToolItemComplete(item: IMessageToolGroup['content'][number]): boolean {
   // Must have a name for functionCall
   if (!item.name) return false;
   // Must have a terminal status — skip Executing/Pending/Confirming

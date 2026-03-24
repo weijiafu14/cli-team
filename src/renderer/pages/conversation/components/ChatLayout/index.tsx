@@ -44,6 +44,8 @@ const ChatLayout: React.FC<{
   headerExtra?: React.ReactNode;
   headerLeft?: React.ReactNode;
   workspaceEnabled?: boolean;
+  /** Hide the header bar entirely (used by agent-team which has its own header) */
+  hideHeader?: boolean;
   /** Conversation ID for mode switching */
   conversationId?: string;
 }> = (props) => {
@@ -175,6 +177,7 @@ const ChatLayout: React.FC<{
   const headerBlock = (
     <>
       <ConversationTabs />
+      {!props.hideHeader && (
       <ArcoLayout.Header
         className={classNames(
           'min-h-44px flex items-center justify-between px-16px pt-8px pb-10px gap-16px !bg-1 chat-layout-header chat-layout-header--glass overflow-hidden',
@@ -223,6 +226,7 @@ const ChatLayout: React.FC<{
           )}
         </div>
       </ArcoLayout.Header>
+      )}
     </>
   );
 

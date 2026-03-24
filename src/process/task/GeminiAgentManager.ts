@@ -29,6 +29,7 @@ import { mainLog, mainWarn, mainError } from '../utils/mainLogger';
 import { hasCronCommands } from './CronCommandDetector';
 import { extractTextFromMessage, processCronInMessage } from './MessageMiddleware';
 import { stripThinkTags } from './ThinkTagDetector';
+import { buildGeminiHistoryFromDb, filterMessagesForGeminiHistory } from './buildGeminiHistoryFromDb';
 import * as fs from 'node:fs';
 
 // gemini agent管理器类
@@ -79,20 +80,26 @@ export class GeminiAgentManager extends BaseAgentManager<
 
   /** Session-level approval store for "always allow" memory */
   readonly approvalStore = new GeminiApprovalStore();
+  private historyRestored = false;
 
   private async injectHistoryFromDatabase(): Promise<void> {
-    // Native session resume is handled by passing persistentSessionId + resumedSessionData
-    // to GeminiAgent at bootstrap. Here we save session info + client history for next time.
+    const db = getDatabase();
+    const firstPage = db.getConversationMessages(this.conversation_id, 0, 1000, 'ASC');
+    const pageSize = Math.max(firstPage.total, firstPage.pageSize, 1);
+    const messages =
+      pageSize === firstPage.pageSize
+        ? firstPage.data
+        : db.getConversationMessages(this.conversation_id, 0, pageSize, 'ASC').data;
+    const history = buildGeminiHistoryFromDb(messages);
+
+    if (history.length === 0) {
+      return;
+    }
+
     try {
-      const sessionInfo = await this.postMessagePromise('get.session-info', {}) as {
-        sessionId: string;
-        conversationFilePath: string | null;
-      } | null;
-      if (sessionInfo?.conversationFilePath) {
-        this.saveSessionData(sessionInfo.conversationFilePath);
-      }
+      await this.postMessagePromise('init.resume-history', { history });
     } catch (e) {
-      mainWarn('[GeminiAgentManager]', 'Failed to persist session info:', e);
+      mainWarn('[GeminiAgentManager]', 'Failed to restore Gemini history from DB:', e);
     }
   }
 
@@ -115,7 +122,7 @@ export class GeminiAgentManager extends BaseAgentManager<
   /** Persist session file path to DB after each message */
   private async persistSessionInfo(): Promise<void> {
     try {
-      const sessionInfo = await this.postMessagePromise('get.session-info', {}) as {
+      const sessionInfo = (await this.postMessagePromise('get.session-info', {})) as {
         sessionId: string;
         conversationFilePath: string | null;
       } | null;
@@ -256,12 +263,10 @@ export class GeminiAgentManager extends BaseAgentManager<
           yoloMode: effectiveYoloMode,
           // Pass conversation_id as persistent sessionId for native session resume
           persistentSessionId: this.conversation_id,
-          // Pass saved session data for true native resume (if available)
-          resumedSessionData: this.loadSavedSessionData(),
         });
       })
       .then(async () => {
-        await this.injectHistoryFromDatabase();
+        this.historyRestored = false;
       });
   }
 
@@ -273,18 +278,17 @@ export class GeminiAgentManager extends BaseAgentManager<
    */
   private static computeMcpFingerprint(mcpServers: IMcpServer[] | undefined | null): string {
     if (!mcpServers || !Array.isArray(mcpServers)) return '[]';
-    const entries = mcpServers
-      .map((s: IMcpServer) => {
-        // Include transport identity so config changes (e.g. different command/url) are detected
-        const transportKey =
-          s.transport.type === 'stdio'
-            ? `${s.transport.command}|${(s.transport.args || []).join(',')}`
-            : 'url' in s.transport
-              ? s.transport.url
-              : '';
-        return { n: s.name, e: s.enabled, st: s.status, t: transportKey };
-      })
-      .sort((a, b) => a.n.localeCompare(b.n));
+    const entries = mcpServers.map((s: IMcpServer) => {
+      // Include transport identity so config changes (e.g. different command/url) are detected
+      const transportKey =
+        s.transport.type === 'stdio'
+          ? `${s.transport.command}|${(s.transport.args || []).join(',')}`
+          : 'url' in s.transport
+            ? s.transport.url
+            : '';
+      return { n: s.name, e: s.enabled, st: s.status, t: transportKey };
+    });
+    entries.sort((a, b) => a.n.localeCompare(b.n));
     return JSON.stringify(entries);
   }
 
@@ -419,7 +423,10 @@ export class GeminiAgentManager extends BaseAgentManager<
           });
         });
       })
-      .then(() => super.sendMessage(data))
+      .then(async () => {
+        await this.restoreHistoryForCurrentTurn(data.msg_id);
+        return super.sendMessage(data);
+      })
       .finally(() => {
         cronBusyGuard.setProcessing(this.conversation_id, false);
         // Save session file path after each message for next resume
@@ -896,7 +903,47 @@ export class GeminiAgentManager extends BaseAgentManager<
 
   // Manually trigger context reload
   async reloadContext(): Promise<void> {
-    await this.injectHistoryFromDatabase();
+    this.historyRestored = false;
+    await this.restoreHistoryForCurrentTurn();
+  }
+
+  private async restoreHistoryForCurrentTurn(excludeMsgId?: string): Promise<void> {
+    if (this.historyRestored) {
+      return;
+    }
+
+    const db = getDatabase();
+    const firstPage = db.getConversationMessages(this.conversation_id, 0, 1000, 'ASC');
+    const pageSize = Math.max(firstPage.total, firstPage.pageSize, 1);
+    const messages =
+      pageSize === firstPage.pageSize
+        ? firstPage.data
+        : db.getConversationMessages(this.conversation_id, 0, pageSize, 'ASC').data;
+    const filteredMessages = filterMessagesForGeminiHistory(messages, excludeMsgId);
+    const history = buildGeminiHistoryFromDb(filteredMessages);
+
+    if (history.length === 0) {
+      this.historyRestored = true;
+      return;
+    }
+
+    await this.postMessagePromise('init.resume-history', { history });
+    this.historyRestored = true;
+
+    try {
+      const conv = db.getConversation(this.conversation_id);
+      if (conv.success && conv.data && conv.data.type === 'gemini') {
+        db.updateConversation(this.conversation_id, {
+          extra: {
+            ...conv.data.extra,
+            geminiResumeSource: 'db-history',
+            geminiHistoryRestoredAt: Date.now(),
+          },
+        } as Partial<typeof conv.data>);
+      }
+    } catch (error) {
+      mainWarn('[GeminiAgentManager]', 'Failed to persist Gemini DB-history metadata:', error);
+    }
   }
 
   /**
