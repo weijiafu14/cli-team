@@ -348,7 +348,6 @@ const MessageList: React.FC<{ className?: string }> = () => {
             ref={virtuosoRef}
             className='flex-1 h-full pb-10px box-border'
             data={processedList}
-            initialTopMostItemIndex={processedList.length - 1}
             atBottomThreshold={100}
             increaseViewportBy={200}
             itemContent={renderItem}

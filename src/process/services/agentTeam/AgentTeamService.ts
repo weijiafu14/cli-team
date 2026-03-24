@@ -263,6 +263,39 @@ export class AgentTeamService {
     }
   }
 
+  /** Abort all running agents in a team: kill processes, write abort entry to timeline */
+  async abortTeam(conversationId: string): Promise<ICoordTimelineEntry> {
+    const team = await this.getResolvedTeam(conversationId);
+    const dispatcher = this.dispatchers.get(conversationId);
+    if (dispatcher) {
+      dispatcher.abortAll();
+    }
+
+    const now = new Date();
+    const tzOffset = -now.getTimezoneOffset();
+    const sign = tzOffset >= 0 ? '+' : '-';
+    const pad = (n: number) => String(Math.abs(n)).padStart(2, '0');
+    const localIso = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}T${pad(now.getHours())}:${pad(now.getMinutes())}:${pad(now.getSeconds())}${sign}${pad(Math.floor(tzOffset / 60))}:${pad(tzOffset % 60)}`;
+
+    const entry: ICoordTimelineEntry = {
+      id: uuid(),
+      ts: localIso,
+      from: 'user',
+      role: 'user',
+      type: 'abort',
+      summary: 'User aborted all agents',
+      body: 'All agent processes have been stopped.',
+      topic: team.teamConversation.id,
+      dispatch: 'none',
+      to: ['*'],
+    };
+
+    const messagesPath = path.join(team.teamConversation.extra.coordDir, 'messages.jsonl');
+    await fs.appendFile(messagesPath, `${JSON.stringify(entry)}\n`, 'utf-8');
+
+    return entry;
+  }
+
   async getTeam(conversationId: string): Promise<Extract<TChatConversation, { type: 'agent-team' }> | undefined> {
     const conversation = this.conversationRepo.getConversation(conversationId);
     if (!conversation || conversation.type !== 'agent-team') return undefined;
@@ -319,6 +352,7 @@ export class AgentTeamService {
     const pad = (n: number) => String(Math.abs(n)).padStart(2, '0');
     const localIso = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}T${pad(now.getHours())}:${pad(now.getMinutes())}:${pad(now.getSeconds())}${sign}${pad(Math.floor(tzOffset / 60))}:${pad(tzOffset % 60)}`;
 
+    const hasTargets = input.targets && input.targets.length > 0;
     const entry: ICoordTimelineEntry = {
       id: msgId,
       ts: localIso,
@@ -329,8 +363,8 @@ export class AgentTeamService {
       body: input.input.trim(),
       topic: team.teamConversation.id,
       task_id: team.teamConversation.id,
-      dispatch: 'all',
-      to: ['*'],
+      dispatch: hasTargets ? 'targets' : 'all',
+      to: hasTargets ? input.targets : ['*'],
       files: attachedFiles,
     };
 
@@ -646,18 +680,26 @@ Agents must not ignore user guidance, and must not flatter the user instead of d
 - \`lock\`: object with \`key\`, \`action\`, \`status\`
 - \`meta\`: free-form metadata
 - \`consensus\`: object for consensus tracking, for example \`{"required": true, "status": "in_progress" | "reached", "decision_id": "<msg-id>" }\`
-- \`dispatch\`: transport routing (\`all\` = broadcast and wake all members, \`targets\` = wake only members listed in \`to\`, \`none\` = append to timeline only, do not wake any agent). Default is \`all\`.
+- \`dispatch\`: transport routing (\`all\` = broadcast and wake all members, \`targets\` = wake only members listed in \`to\`, \`none\` = append to timeline only, do not wake any agent). Default is \`none\`.
 
 ## Dispatch Rules
 
 The \`dispatch\` field controls which agents are woken up when a message is appended:
 
 - User messages always wake all agents regardless of \`dispatch\`.
-- \`dispatch=all\`: wake every member except the sender. Use \`to: ["*"]\`.
+- \`dispatch=all\`: wake every member except the sender. Use \`to: ["*"]\`. **Only use this for messages that genuinely require all agents to respond** (e.g. new task assignments, consensus proposals, challenges).
 - \`dispatch=targets\`: wake only the members listed in \`to\`. Use \`to: ["<memberId>", ...]\`.
-- \`dispatch=none\`: do not wake any agent. Use \`to: ["user"]\`. The message is visible in the timeline but no agent is interrupted.
+- \`dispatch=none\`: do not wake any agent. Use \`to: ["user"]\`. The message is visible in the timeline but no agent is interrupted. **This is the default.**
 
 Use \`--dispatch\` flag with \`coord_write.py\` to set this field.
+
+### Best Practices
+
+- **\`ack\` messages**: use \`--dispatch none\`. ACKs confirm receipt — they do not require others to respond.
+- **\`update\` / \`done\` messages**: use \`--dispatch none\` unless the update changes other agents' work.
+- **\`challenge\` / \`decision\` / \`consensus\` messages**: use \`--dispatch all\` — these require team-wide attention.
+- **Replying to a specific agent**: use \`--dispatch targets --to <memberId>\`.
+- **NEVER use \`--dispatch all\` for routine status updates or acknowledgments** — this causes wakeup loops where agents endlessly respond to each other.
 
 ## Lock Rules
 
@@ -966,7 +1008,8 @@ def main() -> int:
     parser.add_argument("--lock-key", default="")
     parser.add_argument("--lock-action", choices=["none", "acquire", "release"], default="none")
     parser.add_argument("--force-lock", action="store_true")
-    parser.add_argument("--dispatch", choices=["all", "targets", "none"], default="all")
+    parser.add_argument("--dispatch", choices=["all", "targets", "none"], default="none")
+    parser.add_argument("--images", default="", help="Comma-separated image file paths to attach for inline display")
     args = parser.parse_args()
 
     msg_id = f"msg-{datetime.now().strftime('%Y%m%d%H%M%S')}-{uuid4().hex[:8]}"
@@ -1000,6 +1043,9 @@ def main() -> int:
         msg["reply_to"] = args.reply_to
     if lock_info:
         msg["lock"] = lock_info
+    images = [p.strip() for p in args.images.split(",") if p.strip()] if args.images else []
+    if images:
+        msg["images"] = images
 
     messages_path = Path(args.messages)
     messages_path.parent.mkdir(parents=True, exist_ok=True)

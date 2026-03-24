@@ -4,247 +4,405 @@
   height: 100%;
   min-height: 0;
   overflow: hidden;
+  background: var(--color-bg-1);
+  /* Optional: border-left/right to match pane look, but parent usually handles it */
 }
 
+/* Header Area: Compact and dense */
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 20px;
+  border-bottom: 1px solid var(--color-border);
+  background: var(--color-bg-2);
+  flex-shrink: 0;
+}
+
+.headerCopy {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.headerEyebrow {
+  display: none; /* remove redundant eyebrow */
+}
+
+.headerTitle {
+  color: var(--color-text-1);
+  font-size: 16px;
+  font-weight: 600;
+  line-height: 1.2;
+}
+
+.headerSubtitle {
+  color: var(--color-text-3);
+  font-size: 12px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.headerWorkspace {
+  padding: 2px 6px;
+  border-radius: 4px;
+  background: var(--color-fill-2);
+  color: var(--color-text-2);
+  font-size: 11px;
+  font-family: var(--font-mono);
+}
+
+.headerStats {
+  display: flex;
+  gap: 16px;
+}
+
+.headerStat {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+}
+
+.headerStatLabel {
+  color: var(--color-text-3);
+  font-size: 11px;
+  text-transform: uppercase;
+}
+
+.headerStatValue {
+  color: var(--color-text-1);
+  font-size: 14px;
+  font-weight: 600;
+  font-family: var(--font-mono);
+}
+
+/* Tabs */
 .tabBar {
   display: flex;
-  gap: 0;
+  gap: 20px;
+  padding: 0 20px;
   border-bottom: 1px solid var(--color-border);
-  padding: 0 16px;
+  background: var(--color-bg-2);
   flex-shrink: 0;
 }
 
 .tab {
-  padding: 10px 16px;
-  font-size: 14px;
+  padding: 10px 0;
+  font-size: 13px;
   font-weight: 500;
   color: var(--color-text-3);
-  background: none;
+  background: transparent;
   border: none;
   border-bottom: 2px solid transparent;
   cursor: pointer;
-  transition: color 0.2s, border-color 0.2s;
+  transition: color 0.2s;
 }
 
 .tab:hover {
-  color: var(--color-text-1);
+  color: var(--color-text-2);
 }
 
 .tabActive {
-  color: var(--color-text-1);
-  border-bottom-color: var(--color-primary-6, #165dff);
+  color: var(--color-primary-6);
+  border-bottom-color: var(--color-primary-6);
 }
 
+/* Timeline */
 .timeline {
   flex: 1;
   min-height: 0;
   overflow-y: auto;
-  padding: 16px;
+  padding: 20px;
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 16px;
+  background: var(--color-bg-1);
 }
 
 .members {
   flex: 1;
   min-height: 0;
   overflow-y: auto;
-  padding: 16px;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
+  padding: 20px;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  align-content: start;
+  gap: 16px;
+  background: var(--color-bg-1);
 }
 
 .empty {
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 40px 0;
+  flex: 1;
   color: var(--color-text-3);
-  font-size: 14px;
+  font-size: 13px;
 }
 
+/* Timeline Entries */
 .entry {
-  padding: 12px;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 16px;
   border-radius: 8px;
+  background: var(--color-fill-1); /* Base layer */
+  border: 1px solid transparent;
+}
+
+/* Distinctive styling for user */
+.entryUser {
+  background: color-mix(in srgb, var(--color-primary-6) 5%, transparent);
+  border: 1px solid color-mix(in srgb, var(--color-primary-6) 20%, transparent);
+}
+
+/* Distinctive styling for agents */
+.entryAgent {
   background: var(--color-bg-2);
-  border: 1px solid var(--color-border);
+  border: 1px solid var(--color-border-secondary);
 }
 
 .entryHeader {
   display: flex;
   align-items: center;
-  gap: 8px;
-  margin-bottom: 4px;
+  gap: 10px;
   font-size: 12px;
 }
 
-.entryFrom {
-  font-weight: 500;
-  color: var(--color-text-1);
-}
-
-.entryType {
-  padding: 1px 6px;
-  border-radius: 4px;
-  background: var(--color-fill-2);
-  color: var(--color-text-3);
-  font-size: 11px;
-}
-
 .entryLogo {
-  width: 18px;
-  height: 18px;
+  width: 20px;
+  height: 20px;
   border-radius: 4px;
   object-fit: contain;
-  flex-shrink: 0;
+  background: var(--color-bg-1);
 }
 
 .entryUserIcon {
-  width: 18px;
-  height: 18px;
+  width: 20px;
+  height: 20px;
   border-radius: 4px;
-  background: var(--color-primary-light-4, #6aa1ff);
+  background: var(--color-primary-6);
   color: #fff;
   font-size: 11px;
   font-weight: 600;
   display: flex;
   align-items: center;
   justify-content: center;
-  flex-shrink: 0;
+}
+
+.entryFrom {
+  font-weight: 600;
+  color: var(--color-text-1);
+  font-size: 13px;
+}
+
+.entryType {
+  padding: 2px 6px;
+  border-radius: 4px;
+  background: var(--color-fill-3);
+  color: var(--color-text-3);
+  font-family: var(--font-mono);
+  font-size: 11px;
 }
 
 .entryDispatch {
-  padding: 1px 6px;
-  border-radius: 4px;
-  background: var(--color-fill-1);
-  color: var(--color-text-4);
+  color: var(--color-warning-6);
   font-size: 11px;
+  font-family: var(--font-mono);
 }
 
 .entryTime {
   color: var(--color-text-4);
   margin-left: auto;
+  font-family: var(--font-mono);
 }
 
 .entrySummary {
   color: var(--color-text-1);
   font-size: 14px;
-  line-height: 1.5;
+  line-height: 1.6;
 }
 
 .entryBody {
-  margin-top: 8px;
-  padding: 8px;
-  border-radius: 4px;
-  background: var(--color-fill-1);
+  margin-top: 4px;
+  padding: 12px;
+  border-radius: 6px;
+  background: var(--color-bg-1);
+  border: 1px solid var(--color-border);
   color: var(--color-text-2);
   font-size: 13px;
-  line-height: 1.5;
+  line-height: 1.6;
   white-space: pre-wrap;
   word-break: break-word;
-  max-height: 200px;
-  overflow-y: auto;
+  overflow-x: auto;
 }
 
-.entryFiles {
+.entryImages {
   margin-top: 8px;
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
 }
 
-.entryImage {
-  max-width: 200px;
-  max-height: 150px;
-  border-radius: 4px;
-  object-fit: cover;
+.entryImageCard {
+  overflow: hidden;
+  border-radius: 6px;
   border: 1px solid var(--color-border);
+  background: var(--color-bg-1);
+  max-width: 240px;
 }
 
-.entryFileCard {
-  padding: 4px 8px;
-  border-radius: 4px;
-  background: var(--color-fill-2);
-  color: var(--color-text-2);
-  font-size: 12px;
+.entryImage {
+  display: block;
+  width: 100%;
+}
+
+.entryImage :global(.arco-image-img) {
+  display: block;
+  width: 100%;
+  max-height: 160px;
+  object-fit: contain;
+}
+
+.entryImageName {
+  padding: 6px 8px;
+  color: var(--color-text-3);
+  font-size: 11px;
+  background: var(--color-fill-1);
+  border-top: 1px solid var(--color-border);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.entryFiles {
+  margin-top: 8px;
+}
+
+/* Input Area */
+.inputArea {
+  padding: 16px 20px;
+  background: var(--color-bg-2);
+  border-top: 1px solid var(--color-border);
+  flex-shrink: 0;
 }
 
 .pendingFiles {
-  padding: 4px 16px 0;
-  display: flex;
-  flex-wrap: wrap;
-  gap: 4px;
-  flex-shrink: 0;
+  margin-bottom: 8px;
 }
 
-.pendingFileChip {
+.abortButton {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
-  padding: 2px 8px;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border: none;
   border-radius: 4px;
   background: var(--color-fill-2);
-  font-size: 12px;
-  color: var(--color-text-2);
-}
-
-.pendingFileName {
-  max-width: 120px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.pendingFileRemove {
-  background: none;
-  border: none;
   color: var(--color-text-3);
   cursor: pointer;
-  padding: 0 2px;
-  font-size: 14px;
-  line-height: 1;
+  transition: all 0.2s;
 }
 
-.pendingFileRemove:hover {
+.abortButton:hover {
+  color: var(--color-danger-6);
+  background: color-mix(in srgb, var(--color-danger-6) 15%, var(--color-fill-2));
+}
+
+.abortButton:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* Mentions */
+.mentionPopover {
+  position: absolute;
+  bottom: 100%;
+  left: 20px;
+  width: 240px;
+  display: flex;
+  flex-direction: column;
+  padding: 4px;
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  background: var(--color-bg-1);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  max-height: 200px;
+  overflow-y: auto;
+  margin-bottom: 8px;
+  z-index: 10;
+}
+
+.mentionItem {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  font-size: 13px;
   color: var(--color-text-1);
+  border-radius: 4px;
 }
 
-.inputArea {
-  padding: 8px 16px 12px;
-  flex-shrink: 0;
+.mentionItem:hover,
+.mentionItemActive {
+  background: var(--color-fill-2);
 }
 
+.mentionLogo {
+  width: 16px;
+  height: 16px;
+  border-radius: 4px;
+  object-fit: contain;
+}
+
+.mentionBackend {
+  color: var(--color-text-3);
+  font-size: 11px;
+  margin-left: auto;
+  font-family: var(--font-mono);
+}
+
+/* Member Cards */
 .memberCard {
   display: flex;
   align-items: center;
   gap: 12px;
-  padding: 12px;
+  padding: 16px;
   border-radius: 8px;
   background: var(--color-bg-2);
   border: 1px solid var(--color-border);
   cursor: pointer;
+  transition: all 0.2s;
 }
 
 .memberCard:hover {
-  border-color: var(--color-primary-light-4);
+  border-color: var(--color-primary-6);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
 }
 
 .memberLogo {
-  width: 24px;
-  height: 24px;
+  width: 32px;
+  height: 32px;
   border-radius: 6px;
   object-fit: contain;
-  flex-shrink: 0;
 }
 
 .memberName {
-  font-weight: 500;
+  font-weight: 600;
   color: var(--color-text-1);
+  font-size: 14px;
 }
 
 .memberType {
   color: var(--color-text-3);
   font-size: 12px;
-  margin-left: auto;
+  margin-top: 4px;
+  font-family: var(--font-mono);
 }

@@ -107,8 +107,8 @@ export class CoordDispatcher {
   }
 
   private resolveTargets(msg: ICoordTimelineEntry): string[] {
-    // User messages always wake all members
-    if (msg.role === 'user') {
+    // User messages wake all members unless they use @mention (dispatch=targets)
+    if (msg.role === 'user' && msg.dispatch !== 'targets') {
       return Array.from(this.memberStates.keys());
     }
 

@@ -6,7 +6,7 @@
 
 import { channelEventBus } from '@/channels/agent/ChannelEventBus';
 import { ipcBridge } from '@/common';
-import type { CronMessageMeta, IMessageText, IMessageToolGroup, TMessage } from '@/common/chatLib';
+import type { CronMessageMeta, IMessageToolGroup, TMessage } from '@/common/chatLib';
 import { transformMessage } from '@/common/chatLib';
 import type { IResponseMessage } from '@/common/ipcBridge';
 import type { IMcpServer, TProviderWithModel } from '@/common/storage';
@@ -59,6 +59,10 @@ export class GeminiAgentManager extends BaseAgentManager<
     enabledSkills?: string[];
     /** Yolo mode: auto-approve all tool calls / 自动允许模式 */
     yoloMode?: boolean;
+    /** Persistent session ID for native Gemini session resume */
+    persistentSessionId?: string;
+    /** Saved session data for native resume */
+    resumedSessionData?: { conversation: unknown; filePath: string };
   },
   string
 > {
@@ -77,19 +81,69 @@ export class GeminiAgentManager extends BaseAgentManager<
   readonly approvalStore = new GeminiApprovalStore();
 
   private async injectHistoryFromDatabase(): Promise<void> {
+    // Native session resume is handled by passing persistentSessionId + resumedSessionData
+    // to GeminiAgent at bootstrap. Here we save session info + client history for next time.
     try {
-      const result = getDatabase().getConversationMessages(this.conversation_id, 0, 10000);
-      const data = (result.data || []) as TMessage[];
-      const lines = data
-        .filter((m): m is IMessageText => m.type === 'text')
-        .slice(-20)
-        .map((m) => `${m.position === 'right' ? 'User' : 'Assistant'}: ${m.content.content || ''}`);
-      const text = lines.join('\n').slice(-4000);
-      if (text) {
-        await this.postMessagePromise('init.history', { text });
+      const sessionInfo = await this.postMessagePromise('get.session-info', {}) as {
+        sessionId: string;
+        conversationFilePath: string | null;
+      } | null;
+      if (sessionInfo?.conversationFilePath) {
+        this.saveSessionData(sessionInfo.conversationFilePath);
       }
     } catch (e) {
-      // ignore history injection errors
+      mainWarn('[GeminiAgentManager]', 'Failed to persist session info:', e);
+    }
+  }
+
+  /** Load saved Gemini native session data from conversation extra for resume */
+  private loadSavedSessionData(): { conversation: unknown; filePath: string } | undefined {
+    try {
+      const conv = getDatabase().getConversation(this.conversation_id);
+      const filePath = (conv?.data as any)?.extra?.geminiConversationFilePath;
+      if (!filePath || !fs.existsSync(filePath)) return undefined;
+      const content = fs.readFileSync(filePath, 'utf-8');
+      const conversation = JSON.parse(content);
+      mainLog('[GeminiAgentManager]', `Loaded saved session from: ${filePath}`);
+      return { conversation, filePath };
+    } catch (e) {
+      mainWarn('[GeminiAgentManager]', 'Failed to load saved session data:', e);
+      return undefined;
+    }
+  }
+
+  /** Persist session file path to DB after each message */
+  private async persistSessionInfo(): Promise<void> {
+    try {
+      const sessionInfo = await this.postMessagePromise('get.session-info', {}) as {
+        sessionId: string;
+        conversationFilePath: string | null;
+      } | null;
+      if (sessionInfo?.conversationFilePath) {
+        this.saveSessionData(sessionInfo.conversationFilePath);
+      }
+    } catch {
+      // non-critical, ignore
+    }
+  }
+
+  /** Save session file path to conversation extra for future resume.
+   *  Uses json_set to avoid overwriting existing extra fields (teamId, workspace, etc). */
+  private saveSessionData(filePath: string): void {
+    try {
+      const conv = getDatabase().getConversation(this.conversation_id);
+      if (conv?.data) {
+        const existing = (conv.data as any).extra || {};
+        const extra = {
+          ...existing,
+          geminiNativeSessionId: this.conversation_id,
+          geminiConversationFilePath: filePath,
+          geminiResumeSource: 'native-file',
+        };
+        getDatabase().updateConversation(this.conversation_id, { extra } as any);
+      }
+    } catch (e) {
+      mainWarn('[GeminiAgentManager]', 'Failed to save session data:', e);
     }
   }
 
@@ -200,6 +254,10 @@ export class GeminiAgentManager extends BaseAgentManager<
           enabledSkills: allEnabledSkills,
           // Yolo mode: derived from currentMode, not directly from legacy config
           yoloMode: effectiveYoloMode,
+          // Pass conversation_id as persistent sessionId for native session resume
+          persistentSessionId: this.conversation_id,
+          // Pass saved session data for true native resume (if available)
+          resumedSessionData: this.loadSavedSessionData(),
         });
       })
       .then(async () => {
@@ -364,6 +422,8 @@ export class GeminiAgentManager extends BaseAgentManager<
       .then(() => super.sendMessage(data))
       .finally(() => {
         cronBusyGuard.setProcessing(this.conversation_id, false);
+        // Save session file path after each message for next resume
+        void this.persistSessionInfo();
       });
     return result;
   }
@@ -568,14 +628,12 @@ export class GeminiAgentManager extends BaseAgentManager<
     super.init();
     // 接受来子进程的对话消息
     this.on('gemini.message', (data) => {
-      // Mark as finished when content is output (visible to user)
-      // Gemini uses: content, tool_group
-      const contentTypes = ['content', 'tool_group'];
-      if (contentTypes.includes(data.type)) {
-        this.status = 'finished';
-      }
-
       if (data.type === 'finish') {
+        // Only set finished when the entire turn is done — not on content/tool_group chunks.
+        // Setting finished prematurely causes CoordDispatcher to release the busy gate
+        // and send wakeup messages while Gemini is still executing tool calls,
+        // which breaks the function call/response pairing and triggers API 400 errors.
+        this.status = 'finished';
         // When stream finishes, check for cron commands in the accumulated message
         // Use longer delay and retry logic to ensure message is persisted
         this.checkCronWithRetry(0);
