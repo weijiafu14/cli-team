@@ -426,12 +426,13 @@ export default function AgentTeamChat({ conversation_id, workspace }: AgentTeamC
     <ConversationProvider value={{ conversationId: conversation_id, workspace, type: 'agent-team' }}>
       <div className={styles.container}>
         <div className={styles.header}>
-          <div className='flex items-center gap-16px flex-1 min-w-0'>
-            <div className={styles.headerTitle}>
-              Agent Team Room <span className='text-13px text-t-3 font-normal ml-8px'>· {workspaceLabel}</span>
+          <div className={styles.headerLeft}>
+            <div className={styles.headerTitle} style={{ fontSize: '13px', display: 'flex', alignItems: 'center' }}>
+              <span className='font-medium'>Agent Team</span> 
+              <span className='text-12px text-t-3 font-normal ml-8px px-6px py-2px bg-fill-2 rd-4px'>{workspaceLabel}</span>
             </div>
             
-            <div className={styles.tabBar} style={{ padding: 0, border: 'none', marginLeft: '24px' }}>
+            <div className={styles.tabBar} style={{ padding: 0, border: 'none', marginLeft: '12px' }}>
               <button
                 type='button'
                 className={`${styles.tab} ${activeTab === 'timeline' ? styles.tabActive : ''}`}
@@ -446,17 +447,6 @@ export default function AgentTeamChat({ conversation_id, workspace }: AgentTeamC
               >
                 Team Roster
               </button>
-            </div>
-          </div>
-
-          <div className={styles.headerStats} style={{ marginLeft: 'auto' }}>
-            <div className={styles.headerStat}>
-              <span className={styles.headerStatValue}>{timelineCount}</span>
-              <span className={styles.headerStatLabel}>Entries</span>
-            </div>
-            <div className={styles.headerStat}>
-              <span className={styles.headerStatValue}>{mentionableCount}</span>
-              <span className={styles.headerStatLabel}>Agents</span>
             </div>
           </div>
         </div>
