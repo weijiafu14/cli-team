@@ -69,9 +69,23 @@ const CollapsibleBody: React.FC<{ children: React.ReactNode }> = ({ children }) 
   const [isOverflowing, setIsOverflowing] = useState(false);
 
   useEffect(() => {
-    if (bodyRef.current) {
-      setIsOverflowing(bodyRef.current.scrollHeight > 300);
-    }
+    if (!bodyRef.current) return;
+    
+    // Check initially
+    setIsOverflowing(bodyRef.current.scrollHeight > 300);
+    
+    // Use ResizeObserver to detect changes after async rendering (like Markdown images or syntax highlighting)
+    const observer = new ResizeObserver((entries) => {
+      for (const entry of entries) {
+        setIsOverflowing(entry.target.scrollHeight > 300);
+      }
+    });
+    
+    observer.observe(bodyRef.current);
+    
+    return () => {
+      observer.disconnect();
+    };
   }, [children]);
 
   return (
