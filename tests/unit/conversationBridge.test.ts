@@ -3,10 +3,10 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 vi.mock('electron', () => ({ app: { isPackaged: false, getPath: vi.fn(() => '/tmp') } }));
 
 // Capture provider handlers so tests can invoke them directly
-const handlers: Record<string, (...args: any[]) => any> = {};
+const handlers: Record<string, (...args: unknown[]) => unknown> = {};
 function makeChannel(name: string) {
   return {
-    provider: vi.fn((fn: (...args: any[]) => any) => {
+    provider: vi.fn((fn: (...args: unknown[]) => unknown) => {
       handlers[name] = fn;
     }),
     emit: vi.fn(),
@@ -107,6 +107,18 @@ function makeConversation(id: string, workspace = '/ws'): TChatConversation {
   return { id, type: 'gemini', name: 'test', extra: { workspace } } as unknown as TChatConversation;
 }
 
+function makeGeminiTask(id = 'c1') {
+  return {
+    type: 'gemini' as const,
+    conversation_id: id,
+    workspace: '/ws',
+    reloadContext: vi.fn(async () => {}),
+    stop: vi.fn(),
+    sendMessage: vi.fn(),
+    getConfirmations: vi.fn(() => []),
+  };
+}
+
 describe('conversationBridge', () => {
   let service: IConversationService;
   let taskManager: IWorkerTaskManager;
@@ -167,6 +179,31 @@ describe('conversationBridge', () => {
       const result = await handler({ conversation_id: 'missing' });
 
       expect(result).toEqual([]);
+    });
+  });
+
+  describe('reloadContext', () => {
+    it('routes Gemini conversations to task.reloadContext', async () => {
+      const task = makeGeminiTask('c1');
+      vi.mocked(taskManager.getOrBuildTask).mockResolvedValue(
+        task as unknown as Awaited<ReturnType<IWorkerTaskManager['getOrBuildTask']>>
+      );
+
+      const result = await handlers['reloadContext']({ conversation_id: 'c1' });
+
+      expect(taskManager.getOrBuildTask).toHaveBeenCalledWith('c1');
+      expect(task.reloadContext).toHaveBeenCalled();
+      expect(result).toEqual({ success: true });
+    });
+
+    it('rejects non-gemini tasks', async () => {
+      vi.mocked(taskManager.getOrBuildTask).mockResolvedValue({ type: 'acp' } as unknown as Awaited<
+        ReturnType<IWorkerTaskManager['getOrBuildTask']>
+      >);
+
+      const result = await handlers['reloadContext']({ conversation_id: 'c1' });
+
+      expect(result).toEqual({ success: false, msg: 'only supported for gemini' });
     });
   });
 });

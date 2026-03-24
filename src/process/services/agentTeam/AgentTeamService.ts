@@ -78,10 +78,10 @@ You are part of an Agent Team. Follow these rules strictly.
 \`claim\`, \`intent\`, \`update\`, \`question\`, \`challenge\`, \`finding\`, \`design\`, \`decision\`, \`conclusion\`, \`ack\`, \`done\`
 
 ## Key Scripts
-- Read: \`python3 ${cd}/scripts/coord_read.py --messages ${cd}/messages.jsonl --state-dir ${cd}/state --agent-id <memberId>\`
-- Write: \`python3 ${cd}/scripts/coord_write.py --messages ${cd}/messages.jsonl --attachments-dir ${cd}/attachments --locks-dir ${cd}/locks --agent-id <memberId> --type <type> --summary "<summary>"\`
-- Long content: \`python3 ${cd}/scripts/coord_write.py --messages ${cd}/messages.jsonl --attachments-dir ${cd}/attachments --locks-dir ${cd}/locks --agent-id <memberId> --type design --summary "<summary>" --body-file <path>\`
-- Lock: \`python3 ${cd}/scripts/coord_write.py --messages ${cd}/messages.jsonl --attachments-dir ${cd}/attachments --locks-dir ${cd}/locks --agent-id <memberId> --type claim --summary "<summary>" --lock-key <key> --lock-action acquire\`
+- Read: \`python3 ${cd}/scripts/coord_read.py --agent-id <memberId>\`
+- Write: \`python3 ${cd}/scripts/coord_write.py --agent-id <memberId> --type <type> --summary "<summary>"\`
+- Long content: \`python3 ${cd}/scripts/coord_write.py --agent-id <memberId> --type design --summary "<summary>" --body-file <path>\`
+- Lock: \`python3 ${cd}/scripts/coord_write.py --agent-id <memberId> --type claim --summary "<summary>" --lock-key <key> --lock-action acquire\`
 - Direct message (wake specific member only): add \`--dispatch targets --to <memberId>\`
 - No-wakeup message (timeline only): add \`--dispatch none --to user\`
 - Peek (without advancing cursor): add \`--peek\`
@@ -505,8 +505,8 @@ export class AgentTeamService {
     const skillContent = generateSkillMd(teamId);
     await fs.writeFile(path.join(coordDir, 'SKILL.md'), skillContent, 'utf-8');
 
-    // Write coord scripts into workspace (embedded, no external dependency)
-    await this.writeCoordScripts(coordDir);
+    // Write coord scripts into workspace with team-specific default paths
+    await this.writeCoordScripts(coordDir, teamId);
   }
 
   private async writeIfChanged(filePath: string, content: string): Promise<void> {
@@ -521,10 +521,35 @@ export class AgentTeamService {
     }
   }
 
-  private async writeCoordScripts(coordDir: string): Promise<void> {
+  private async writeCoordScripts(coordDir: string, teamId: string): Promise<void> {
     const scriptsDst = path.join(coordDir, 'scripts');
-    await this.writeIfChanged(path.join(scriptsDst, 'coord_read.py'), EMBEDDED_COORD_READ_PY);
-    await this.writeIfChanged(path.join(scriptsDst, 'coord_write.py'), EMBEDDED_COORD_WRITE_PY);
+    const relCoordDir = getRelativeCoordDir(teamId);
+    // Inject team-specific default paths into scripts so agents can't accidentally
+    // write to the wrong team's messages.jsonl (the root cause of "sending to wrong group")
+    const readScript = EMBEDDED_COORD_READ_PY
+      .replace(
+        `required=True, help="Path to messages.jsonl (required to prevent reading wrong team)")`,
+        `default="${relCoordDir}/messages.jsonl")`
+      )
+      .replace(
+        `required=True, help="Path to state directory (required)")`,
+        `default="${relCoordDir}/state")`
+      );
+    const writeScript = EMBEDDED_COORD_WRITE_PY
+      .replace(
+        `required=True, help="Path to messages.jsonl (required to prevent writing to wrong team)")`,
+        `default="${relCoordDir}/messages.jsonl")`
+      )
+      .replace(
+        `required=True, help="Path to attachments directory (required)")`,
+        `default="${relCoordDir}/attachments")`
+      )
+      .replace(
+        `required=True, help="Path to locks directory (required)")`,
+        `default="${relCoordDir}/locks")`
+      );
+    await this.writeIfChanged(path.join(scriptsDst, 'coord_read.py'), readScript);
+    await this.writeIfChanged(path.join(scriptsDst, 'coord_write.py'), writeScript);
   }
 
   private async syncTeamWorkspaceAssets(teamConversation: Extract<TChatConversation, { type: 'agent-team' }>): Promise<void> {
@@ -875,8 +900,8 @@ def format_line(line_no: int, msg: dict) -> str:
 def main() -> int:
     parser = argparse.ArgumentParser(description="Read only new coordination messages for one agent.")
     parser.add_argument("--agent-id", required=True)
-    parser.add_argument("--messages", default=".agents/coord/messages.jsonl")
-    parser.add_argument("--state-dir", default=".agents/coord/state")
+    parser.add_argument("--messages", required=True, help="Path to messages.jsonl (required to prevent reading wrong team)")
+    parser.add_argument("--state-dir", required=True, help="Path to state directory (required)")
     parser.add_argument("--topic")
     parser.add_argument("--limit", type=int, default=50)
     parser.add_argument("--peek", action="store_true")
@@ -1000,9 +1025,9 @@ def main() -> int:
     parser.add_argument("--to", default="*")
     parser.add_argument("--body")
     parser.add_argument("--body-file")
-    parser.add_argument("--messages", default=".agents/coord/messages.jsonl")
-    parser.add_argument("--attachments-dir", default=".agents/coord/attachments")
-    parser.add_argument("--locks-dir", default=".agents/coord/locks")
+    parser.add_argument("--messages", required=True, help="Path to messages.jsonl (required to prevent writing to wrong team)")
+    parser.add_argument("--attachments-dir", required=True, help="Path to attachments directory (required)")
+    parser.add_argument("--locks-dir", required=True, help="Path to locks directory (required)")
     parser.add_argument("--max-inline-chars", type=int, default=400)
     parser.add_argument("--reply-to", default="")
     parser.add_argument("--lock-key", default="")

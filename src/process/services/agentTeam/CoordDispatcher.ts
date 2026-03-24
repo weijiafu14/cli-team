@@ -4,7 +4,6 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import * as path from 'node:path';
 import { v4 as uuid } from 'uuid';
 import type { IAgentTeamMember } from '@/common/storage';
 import type { AgentTeamDispatchPolicy } from '@/common/storage';
@@ -19,6 +18,59 @@ type MemberState = {
   cursorLine: number;
   lastConsensusSignature?: string;
 };
+
+type WakeupMessageParams = {
+  relCoordDir: string;
+  memberId: string;
+  messages: ICoordTimelineEntry[];
+};
+
+const WAKEUP_SUMMARY_LIMIT = 3;
+const WAKEUP_FILE_HINT_LIMIT = 3;
+
+function buildWakeupSummaryLines(messages: ICoordTimelineEntry[]): string[] {
+  return messages
+    .slice(-WAKEUP_SUMMARY_LIMIT)
+    .map((msg) => `- ${msg.type} from=${msg.from}${msg.summary ? ` | ${msg.summary}` : ''}`);
+}
+
+function buildWakeupFileHints(messages: ICoordTimelineEntry[]): string[] {
+  const allFiles = messages.flatMap((message) => message.files || []);
+  if (allFiles.length === 0) {
+    return [];
+  }
+
+  const visibleFiles = allFiles.slice(0, WAKEUP_FILE_HINT_LIMIT).map((filePath) => `- ${filePath}`);
+  const remainingCount = allFiles.length - visibleFiles.length;
+
+  return [
+    `Attached files: ${allFiles.length}`,
+    ...visibleFiles,
+    ...(remainingCount > 0 ? [`- ... (+${remainingCount} more)`] : []),
+  ];
+}
+
+export function buildCoordWakeupMessage({ relCoordDir, memberId, messages }: WakeupMessageParams): string {
+  const topics = Array.from(
+    new Set(messages.map((msg) => msg.topic).filter((topic): topic is string => Boolean(topic)))
+  );
+
+  const lines = [
+    '[Internal Agent Team Wakeup]',
+    'Scheduler notice only. Do not echo or quote it into chat or coord.',
+    `Read now: python3 ${relCoordDir}/scripts/coord_read.py --messages ${relCoordDir}/messages.jsonl --state-dir ${relCoordDir}/state --agent-id ${memberId}`,
+    `Source of truth: ${relCoordDir}/TEAM.md, ${relCoordDir}/protocol.md`,
+    'Write back via coord_write.py with --summary.',
+    'If /consensus is active, ACK the final decision with --reply-to <decision-id>.',
+    `Unread: ${messages.length}`,
+    topics.length > 0 ? `Topics: ${topics.join(', ')}` : '',
+    messages.length > 0 ? 'Recent unread:' : '',
+    ...buildWakeupSummaryLines(messages),
+    ...buildWakeupFileHints(messages),
+  ];
+
+  return lines.filter(Boolean).join('\n');
+}
 
 /**
  * Dispatches coord messages to team member agents.
@@ -37,7 +89,7 @@ export class CoordDispatcher {
     private readonly workerTaskManager: IWorkerTaskManager,
     private readonly dispatchPolicy: AgentTeamDispatchPolicy,
     private readonly onConsensusReached?: () => void,
-    private readonly onTimelineUpdate?: (entries: ICoordTimelineEntry[]) => void,
+    private readonly onTimelineUpdate?: (entries: ICoordTimelineEntry[]) => void
   ) {
     this.watcher = new CoordFileWatcher(coordDir);
 
@@ -234,7 +286,7 @@ export class CoordDispatcher {
     const timeline = this.watcher.readAll();
     const consensusIndex = [...timeline]
       .map((entry, index) => ({ entry, index }))
-      .reverse()
+      .toReversed()
       .find(({ entry }) => entry.type === 'consensus')?.index;
 
     if (consensusIndex === undefined) {
@@ -243,9 +295,7 @@ export class CoordDispatcher {
     }
 
     // If user sent a new message after the consensus, the consensus is superseded — stop enforcing it
-    const hasUserMessageAfterConsensus = timeline
-      .slice(consensusIndex + 1)
-      .some((entry) => entry.role === 'user');
+    const hasUserMessageAfterConsensus = timeline.slice(consensusIndex + 1).some((entry) => entry.role === 'user');
     if (hasUserMessageAfterConsensus) {
       state.lastConsensusSignature = undefined;
       return;
@@ -254,7 +304,7 @@ export class CoordDispatcher {
     const consensusWindow = timeline.slice(consensusIndex);
     const decisionIndexInWindow = [...consensusWindow]
       .map((entry, index) => ({ entry, index }))
-      .reverse()
+      .toReversed()
       .find(({ entry }) => entry.type === 'decision' || entry.type === 'conclusion')?.index;
 
     const decisionWindow = decisionIndexInWindow === undefined ? [] : consensusWindow.slice(decisionIndexInWindow);
@@ -263,7 +313,7 @@ export class CoordDispatcher {
     const ackFroms = new Set(
       decisionWindow
         .filter((entry) => entry.type === 'ack' && finalDecisionId && entry.reply_to === finalDecisionId)
-        .map((entry) => entry.from),
+        .map((entry) => entry.from)
     );
 
     const missingMembers = Array.from(this.memberStates.values()).filter(({ member }) => {
@@ -276,12 +326,17 @@ export class CoordDispatcher {
       return;
     }
 
-    const signature = `${decisionWindow[0]?.id || 'no-decision'}:${missingMembers.map((member) => member.member.memberId).sort().join(',')}`;
+    const signature = `${decisionWindow[0]?.id || 'no-decision'}:${missingMembers
+      .map((member) => member.member.memberId)
+      .toSorted()
+      .join(',')}`;
     if (state.lastConsensusSignature === signature) {
       return;
     }
 
-    const isTargetMissing = missingMembers.some((memberState) => memberState.member.conversationId === state.member.conversationId);
+    const isTargetMissing = missingMembers.some(
+      (memberState) => memberState.member.conversationId === state.member.conversationId
+    );
     if (!isTargetMissing) {
       state.lastConsensusSignature = signature;
       return;
@@ -295,8 +350,7 @@ export class CoordDispatcher {
       role: 'system',
       type: 'consensus-reminder',
       summary: `Consensus still pending. Missing ACK from ${missingMembers.map((member) => member.member.name).join(', ')}`,
-      body:
-        'Consensus has not been reached yet. Emit an explicit ack with --reply-to <final-decision-id> before ending.',
+      body: 'Consensus has not been reached yet. Emit an explicit ack with --reply-to <final-decision-id> before ending.',
     };
     void this.dispatchToMember(state, reminder);
   }
@@ -334,35 +388,11 @@ export class CoordDispatcher {
   }
 
   private buildWakeupMessage(state: MemberState, messages: ICoordTimelineEntry[]): string {
-    const topics = Array.from(
-      new Set(
-        messages
-          .map((msg) => msg.topic)
-          .filter((topic): topic is string => Boolean(topic)),
-      ),
-    );
-
-    const summaryLines = messages
-      .slice(-3)
-      .map((msg) => `- ${msg.type} from=${msg.from}${msg.summary ? ` | ${msg.summary}` : ''}`);
-
-    return [
-      '[Internal Agent Team Wakeup]',
-      'This is an internal scheduler notice, not a user-facing request.',
-      'Do not echo or quote this wakeup text back into chat or coord.',
-      `You have ${messages.length} unread coordination message(s).`,
-      `Run now: python3 ${this.getRelCoordDir()}/scripts/coord_read.py --messages ${this.getRelCoordDir()}/messages.jsonl --state-dir ${this.getRelCoordDir()}/state --agent-id ${state.member.memberId}`,
-      `Use ${this.getRelCoordDir()}/TEAM.md and ${this.getRelCoordDir()}/protocol.md as the source of truth.`,
-      'After reading unread coord messages, continue work and write back only through coord_write.py.',
-      'If you call coord_write.py, --summary is mandatory on every write, including when using --body or --body-file.',
-      'If /consensus is active, do not end until you ACK the final decision with --reply-to <decision-id>.',
-      topics.length > 0 ? `Recent topics: ${topics.join(', ')}` : '',
-      summaryLines.length > 0 ? 'Recent unread summaries:' : '',
-      ...summaryLines,
-      ...this.getFileHints(messages),
-    ]
-      .filter(Boolean)
-      .join('\n');
+    return buildCoordWakeupMessage({
+      relCoordDir: this.getRelCoordDir(),
+      memberId: state.member.memberId,
+      messages,
+    });
   }
 
   /** Get the relative coord directory path (e.g. .agents/teams/<teamId>/coord) */
@@ -371,14 +401,5 @@ export class CoordDispatcher {
     // Extract from .agents onwards
     const idx = this.coordDir.indexOf('.agents');
     return idx >= 0 ? this.coordDir.slice(idx) : this.coordDir;
-  }
-
-  private getFileHints(messages: ICoordTimelineEntry[]): string[] {
-    const allFiles = messages.flatMap((m) => m.files || []);
-    if (allFiles.length === 0) return [];
-    return [
-      `Attached files (${allFiles.length}):`,
-      ...allFiles.map((f) => `- ${f}`),
-    ];
   }
 }

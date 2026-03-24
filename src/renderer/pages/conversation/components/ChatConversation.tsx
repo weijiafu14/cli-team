@@ -320,12 +320,15 @@ const ChatConversation: React.FC<{
     </div>
   );
 
+  const isAgentTeam = conversation?.type === 'agent-team';
+
   return (
     <ChatLayout
-      title={conversation?.name}
+      title={isAgentTeam ? undefined : conversation?.name}
       {...chatLayoutProps}
-      headerLeft={modelSelector}
-      headerExtra={headerExtraNode}
+      headerLeft={isAgentTeam ? undefined : modelSelector}
+      headerExtra={isAgentTeam ? undefined : headerExtraNode}
+      hideHeader={isAgentTeam}
       siderTitle={sliderTitle}
       sider={<ChatSider conversation={conversation} />}
       workspaceEnabled={workspaceEnabled}
