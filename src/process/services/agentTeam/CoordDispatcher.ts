@@ -101,8 +101,10 @@ export function evaluateConsensusProgress(
   const latestConsensus = timeline
     .map((entry, index) => ({ entry, index }))
     .slice()
-    .toReversed()
-    .find(({ entry }) => entry.type === 'consensus');
+    .reverse()
+    .find(({ entry }) => {
+      return entry.type === 'consensus';
+    });
 
   if (!latestConsensus) {
     return { status: 'inactive' };
@@ -115,22 +117,39 @@ export function evaluateConsensusProgress(
   }
 
   const consensusWindow = timeline.slice(consensusIndex + 1);
-  const latestDecision = consensusWindow
+  const scopedCandidates = consensusWindow
     .map((entry, index) => ({ entry, index }))
-    .slice()
-    .toReversed()
-    .find(({ entry }) => {
-      return (entry.type === 'decision' || entry.type === 'conclusion') && matchesConsensusScope(consensusEntry, entry);
-    });
+    .filter(({ entry }) => matchesConsensusScope(consensusEntry, entry));
 
-  if (!latestDecision) {
+  // Only `decision` can become the ACK target. `conclusion` remains a human-facing
+  // summary node and must not silently supersede the final decision ID.
+  const decisionCandidates = scopedCandidates.filter(({ entry }) => entry.type === 'decision');
+
+  if (decisionCandidates.length === 0) {
     return { status: 'waiting-decision' };
   }
 
-  const decisionWindow = consensusWindow.slice(latestDecision.index);
+  // Check ALL decisions: if any single decision has been ACK'd by all members, consensus is reached.
+  // This prevents a later decision from invalidating earlier ACKs.
+  for (const candidate of decisionCandidates) {
+    const candidateAckFroms = new Set(
+      consensusWindow
+        .filter((entry) => entry.type === 'ack' && entry.reply_to === candidate.entry.id)
+        .map((entry) => entry.from)
+    );
+    const allAcked = members.every(
+      (member) => [member.memberId, member.name, member.conversationId].some((identity) => candidateAckFroms.has(identity))
+    );
+    if (allAcked) {
+      return { status: 'reached', finalDecisionId: candidate.entry.id };
+    }
+  }
+
+  // No decision has full ACK coverage yet. Use the latest decision as the target for reminders.
+  const latestDecision = decisionCandidates[decisionCandidates.length - 1]!;
   const finalDecisionId = latestDecision.entry.id;
   const ackFroms = new Set(
-    decisionWindow
+    consensusWindow
       .filter((entry) => entry.type === 'ack' && entry.reply_to === finalDecisionId)
       .map((entry) => entry.from)
   );
@@ -140,10 +159,6 @@ export function evaluateConsensusProgress(
       (member) => ![member.memberId, member.name, member.conversationId].some((identity) => ackFroms.has(identity))
     )
     .map((member) => member.conversationId);
-
-  if (missingConversationIds.length === 0) {
-    return { status: 'reached', finalDecisionId };
-  }
 
   return {
     status: 'awaiting-acks',
@@ -384,7 +399,7 @@ export class CoordDispatcher {
     const signature = `${progress.finalDecisionId}:${missingMembers
       .map((memberState) => memberState.member.memberId)
       .slice()
-      .toSorted()
+      .sort()
       .join(',')}`;
     if (state.lastConsensusSignature === signature) {
       return;

@@ -74,9 +74,13 @@ describe('useAutoScroll - scroll to bottom on message send (#977)', () => {
   it('should NOT scroll when AI responds (position=left)', async () => {
     const initialMessages: TMessage[] = [createMessage('right', '1')];
 
-    const { result, rerender } = renderHook(({ messages, itemCount }) => useAutoScroll({ messages, itemCount }), {
-      initialProps: { messages: initialMessages, itemCount: 1 },
-    });
+    const { result, rerender } = renderHook(
+      ({ messages, itemCount, initialScrollToBottomOnLoad = false }) =>
+        useAutoScroll({ messages, itemCount, initialScrollToBottomOnLoad }),
+      {
+        initialProps: { messages: initialMessages, itemCount: 1, initialScrollToBottomOnLoad: false },
+      }
+    );
 
     (result.current.virtuosoRef as any).current = mockVirtuosoHandle;
 
@@ -91,6 +95,74 @@ describe('useAutoScroll - scroll to bottom on message send (#977)', () => {
 
     // Should NOT call scrollToIndex for AI messages
     expect(mockVirtuosoHandle.scrollToIndex).not.toHaveBeenCalled();
+  });
+
+  it('should scroll on initial DB load only when explicitly enabled', async () => {
+    const { result, rerender } = renderHook(
+      ({ messages, itemCount, initialScrollTargetIndex }) =>
+        useAutoScroll({ messages, itemCount, initialScrollTargetIndex }),
+      {
+        initialProps: {
+          messages: [] as TMessage[],
+          itemCount: 0,
+          initialScrollTargetIndex: 'LAST' as const,
+        },
+      }
+    );
+
+    (result.current.virtuosoRef as any).current = mockVirtuosoHandle;
+
+    rerender({
+      messages: [createMessage('left', '1')],
+      itemCount: 1,
+      initialScrollTargetIndex: 'LAST' as const,
+    });
+
+    await act(async () => {
+      vi.runAllTimers();
+    });
+
+    expect(mockVirtuosoHandle.scrollToIndex).toHaveBeenCalledWith(
+      expect.objectContaining({
+        index: 'LAST',
+        behavior: 'auto',
+        align: 'end',
+      })
+    );
+  });
+
+  it('should scroll to the latest right-side message on initial load when a specific index is provided', async () => {
+    const { result, rerender } = renderHook(
+      ({ messages, itemCount, initialScrollTargetIndex }) =>
+        useAutoScroll({ messages, itemCount, initialScrollTargetIndex }),
+      {
+        initialProps: {
+          messages: [] as TMessage[],
+          itemCount: 0,
+          initialScrollTargetIndex: 2,
+        },
+      }
+    );
+
+    (result.current.virtuosoRef as any).current = mockVirtuosoHandle;
+
+    rerender({
+      messages: [createMessage('left', '1'), createMessage('left', '2'), createMessage('right', '3')],
+      itemCount: 3,
+      initialScrollTargetIndex: 2,
+    });
+
+    await act(async () => {
+      vi.runAllTimers();
+    });
+
+    expect(mockVirtuosoHandle.scrollToIndex).toHaveBeenCalledWith(
+      expect.objectContaining({
+        index: 2,
+        behavior: 'auto',
+        align: 'end',
+      })
+    );
   });
 
   it('should reset userScrolled flag when user sends message', async () => {

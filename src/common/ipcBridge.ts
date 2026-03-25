@@ -151,9 +151,10 @@ export const agentTeam = {
   getTimeline: bridge.buildProvider<IBridgeResponse<{ entries: ICoordTimelineEntry[] }>, { conversation_id: string }>(
     'agent-team.get-timeline'
   ),
-  getMembers: bridge.buildProvider<IBridgeResponse<{ conversations: TChatConversation[] }>, { conversation_id: string }>(
-    'agent-team.get-members'
-  ),
+  getMembers: bridge.buildProvider<
+    IBridgeResponse<{ conversations: TChatConversation[] }>,
+    { conversation_id: string }
+  >('agent-team.get-members'),
   timelineStream: bridge.buildEmitter<{ conversation_id: string; entry: ICoordTimelineEntry }>('agent-team.timeline'),
   abort: bridge.buildProvider<IBridgeResponse, { conversation_id: string }>('agent-team.abort'),
 };
@@ -586,7 +587,7 @@ export const openclawConversation = {
 export const database = {
   getConversationMessages: bridge.buildProvider<
     import('@/common/chatLib').TMessage[],
-    { conversation_id: string; page?: number; pageSize?: number }
+    { conversation_id: string; page?: number; pageSize?: number; order?: 'ASC' | 'DESC' }
   >('database.get-conversation-messages'),
   getUserConversations: bridge.buildProvider<
     import('@/common/storage').TChatConversation[],

@@ -71,7 +71,7 @@ const SendBox: React.FC<{
   const conversationContext = useConversationContextSafe();
   const { t } = useTranslation();
   const [isLoading, setIsLoading] = useState(false);
-  const [isSingleLine, setIsSingleLine] = useState(!defaultMultiLine);
+  const [isSingleLine, setIsSingleLine] = useState(() => (lockMultiLine ? false : !defaultMultiLine));
   const [isInputFocused, setIsInputFocused] = useState(false);
   const isInputActive = isInputFocused;
   const { activeBorderColor, inactiveBorderColor, activeShadow } = useInputFocusRing();
@@ -101,6 +101,9 @@ const SendBox: React.FC<{
   // 初始化时获取单行输入框的可用宽度
   // Initialize and get the available width of single-line input
   useEffect(() => {
+    if (lockMultiLine) {
+      return;
+    }
     const timer = setTimeout(() => {
       if (containerRef.current && singleLineWidthRef.current === 0) {
         const textarea = containerRef.current.querySelector('textarea');
@@ -112,7 +115,7 @@ const SendBox: React.FC<{
       }
     }, 100);
     return () => clearTimeout(timer);
-  }, []);
+  }, [lockMultiLine]);
 
   // 移动端挂载后主动清除焦点，拦截路由切换导致的非用户触发聚焦
   useEffect(() => {
@@ -126,6 +129,13 @@ const SendBox: React.FC<{
   // 检测是否单行
   // Detect whether to use single-line or multi-line mode
   useEffect(() => {
+    if (lockMultiLine) {
+      if (isSingleLine) {
+        setIsSingleLine(false);
+      }
+      return;
+    }
+
     // 有换行符直接多行
     // Switch to multi-line mode if newline character exists
     if (input.includes('\n')) {
@@ -192,7 +202,7 @@ const SendBox: React.FC<{
     });
 
     return () => cancelAnimationFrame(frame);
-  }, [input, lockMultiLine]);
+  }, [input, isSingleLine, lockMultiLine]);
 
   // 使用拖拽 hook
   const { isFileDragging, dragHandlers } = useDragUpload({
