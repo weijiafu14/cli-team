@@ -234,7 +234,7 @@ export const processGeminiStreamEvents = async (
 
             // Emit structured overflow data for AutoCompactionOrchestrator
             onStreamEvent({
-              type: 'gemini_context_overflow',
+              type: 'gemini_context_overflow' as typeof ServerGeminiEventType.Error,
               data: { estimatedRequestTokenCount: estimated, remainingTokenCount: remaining },
             });
           }
