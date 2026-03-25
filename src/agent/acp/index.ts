@@ -48,6 +48,33 @@ import { getClaudeModel } from './utils';
 
 /** Enable ACP performance diagnostics via ACP_PERF=1 */
 const ACP_PERF_LOG = process.env.ACP_PERF === '1';
+const ACP_AUTO_RECOVERY_MAX_ATTEMPTS = 3;
+const ACP_AUTO_RECOVERY_BASE_DELAY_MS = 2000;
+const ACP_AUTO_RECOVERY_MAX_DELAY_MS = 15000;
+
+export function shouldAutoRecoverAcpErrorMessage(error: unknown): boolean {
+  const message = error instanceof Error ? error.message : String(error);
+  if (!message) {
+    return false;
+  }
+
+  const hardStopPatterns = [/CLI not found/i, /authentication/i, /login failed/i, /model_not_found/i, /无可用渠道/i];
+  if (hardStopPatterns.some((pattern) => pattern.test(message))) {
+    return false;
+  }
+
+  return [
+    /Connection timeout after 70 seconds/i,
+    /Initialize timeout after 60 seconds/i,
+    /ACP process exited during startup/i,
+    /process disconnected unexpectedly/i,
+  ].some((pattern) => pattern.test(message));
+}
+
+export function getAcpAutoRecoveryDelayMs(attempt: number): number {
+  const normalizedAttempt = Math.max(1, attempt);
+  return Math.min(ACP_AUTO_RECOVERY_BASE_DELAY_MS * 2 ** (normalizedAttempt - 1), ACP_AUTO_RECOVERY_MAX_DELAY_MS);
+}
 
 /**
  * Initialize response result interface
@@ -171,6 +198,11 @@ export class AcpAgent {
 
   // Whether usage_update session notifications have been received (if so, skip PromptResponse.usage fallback)
   private hasReceivedUsageUpdate = false;
+  private startPromise: Promise<void> | null = null;
+  private autoRecoveryTimer: NodeJS.Timeout | null = null;
+  private autoRecoveryAttempt = 0;
+  private autoRecoveryInFlight = false;
+  private suppressAutoRecovery = false;
 
   constructor(config: AcpAgentConfig) {
     this.id = config.id;
@@ -251,125 +283,16 @@ export class AcpAgent {
 
   // 启动ACP连接和会话
   async start(): Promise<void> {
-    const startTotal = Date.now();
-    try {
-      this.emitStatusMessage('connecting');
-
-      let connectTimeoutId: NodeJS.Timeout | null = null;
-      const connectTimeoutPromise = new Promise<never>((_, reject) => {
-        connectTimeoutId = setTimeout(() => reject(new Error('Connection timeout after 70 seconds')), 70000);
-      });
-
-      const connectStart = Date.now();
-      try {
-        const tryConnect = async () => {
-          await Promise.race([
-            this.connection.connect(
-              this.extra.backend,
-              this.extra.cliPath,
-              this.extra.workspace,
-              this.extra.customArgs,
-              this.extra.customEnv
-            ),
-            connectTimeoutPromise,
-          ]);
-        };
-
-        try {
-          await tryConnect();
-        } catch (firstError) {
-          // Transient startup failures (env race / process warmup) are common on first try.
-          // Retry once after a short backoff to reduce "need multiple clicks to connect".
-          console.warn(
-            '[ACP] First connect attempt failed, retrying once:',
-            firstError instanceof Error ? firstError.message : String(firstError)
-          );
-          await this.connection.disconnect();
-          await new Promise((resolve) => setTimeout(resolve, 300));
-          await tryConnect();
-        }
-      } finally {
-        if (connectTimeoutId) {
-          clearTimeout(connectTimeoutId);
-        }
-      }
-      if (ACP_PERF_LOG) console.log(`[ACP-PERF] start: connection.connect() completed ${Date.now() - connectStart}ms`);
-
-      this.emitStatusMessage('connected');
-
-      const authStart = Date.now();
-      await this.performAuthentication();
-      if (ACP_PERF_LOG) console.log(`[ACP-PERF] start: authentication completed ${Date.now() - authStart}ms`);
-
-      // 避免重复创建会话：仅当尚无活动会话时再创建
-      // Create new session or resume existing one (if ACP backend supports it)
-      if (!this.connection.hasActiveSession) {
-        const sessionStart = Date.now();
-        await this.createOrResumeSession();
-        if (ACP_PERF_LOG) console.log(`[ACP-PERF] start: session created ${Date.now() - sessionStart}ms`);
-      }
-
-      // YOLO mode: bypass all permission checks for supported backends
-      if (this.extra.yoloMode) {
-        const yoloModeMap: Partial<Record<AcpBackend, string>> = {
-          claude: CLAUDE_YOLO_SESSION_MODE,
-          codebuddy: CODEBUDDY_YOLO_SESSION_MODE,
-          qwen: QWEN_YOLO_SESSION_MODE,
-          iflow: IFLOW_YOLO_SESSION_MODE,
-        };
-        const sessionMode = yoloModeMap[this.extra.backend];
-        if (sessionMode) {
-          try {
-            const modeStart = Date.now();
-            await this.connection.setSessionMode(sessionMode);
-            if (ACP_PERF_LOG) console.log(`[ACP-PERF] start: session mode set ${Date.now() - modeStart}ms`);
-          } catch (error) {
-            const errorMessage = error instanceof Error ? error.message : String(error);
-            throw new Error(`[ACP] Failed to enable ${this.extra.backend} YOLO mode (${sessionMode}): ${errorMessage}`, { cause: error });
-          }
-        }
-      }
-
-      // Apply model from ~/.claude/settings.json for Claude backend.
-      // claude-agent-acp may default to a region-mismatched Bedrock model;
-      // explicitly setting the model from settings ensures correctness.
-      // Uses session/set_model (direct CLI control) for consistency with runtime switching.
-      if (this.extra.backend === 'claude') {
-        const configuredModel = getClaudeModel();
-        if (configuredModel) {
-          try {
-            const modelStart = Date.now();
-            await this.connection.setModel(configuredModel);
-            if (ACP_PERF_LOG) console.log(`[ACP-PERF] start: model set ${Date.now() - modelStart}ms`);
-          } catch (error) {
-            const errMsg = error instanceof Error ? error.message : String(error);
-            console.warn(`[ACP] Failed to set model from settings: ${errMsg}`);
-            // Detect third-party relay/proxy errors (e.g., NewAPI/OneAPI "model_not_found").
-            // These services route by model name and may not have channels configured for
-            // specific model IDs like "claude-sonnet-4-6". Emit a visible warning so the
-            // user knows to update their relay's model configuration.
-            if (errMsg.includes('model_not_found') || errMsg.includes('无可用渠道')) {
-              this.emitErrorMessage(
-                `Model "${configuredModel}" is not available on your API relay service. ` +
-                  `Please add this model to your relay's channel configuration, ` +
-                  `or update ANTHROPIC_MODEL in ~/.claude/settings.json to a supported model name. ` +
-                  `Falling back to the relay's default model.`
-              );
-            }
-          }
-        }
-      }
-
-      // Emit initial model info after session setup completes
-      this.emitModelInfo();
-
-      this.emitStatusMessage('session_active');
-      if (ACP_PERF_LOG) console.log(`[ACP-PERF] start: total ${Date.now() - startTotal}ms`);
-    } catch (error) {
-      if (ACP_PERF_LOG) console.log(`[ACP-PERF] start: failed after ${Date.now() - startTotal}ms`);
-      this.emitStatusMessage('error');
-      throw error;
+    if (this.startPromise) {
+      return this.startPromise;
     }
+
+    this.suppressAutoRecovery = false;
+    this.clearAutoRecoveryTimer();
+    this.startPromise = this.startInternal().finally(() => {
+      this.startPromise = null;
+    });
+    return this.startPromise;
   }
 
   /**
@@ -485,6 +408,8 @@ export class AcpAgent {
   }
 
   async stop(): Promise<void> {
+    this.suppressAutoRecovery = true;
+    this.resetAutoRecoveryState();
     await this.connection.disconnect();
     this.emitStatusMessage('disconnected');
     // Clear session-scoped caches when session ends
@@ -1066,9 +991,9 @@ export class AcpAgent {
 
     // 2. Emit error message with helpful information
     const errorMsg =
-      `${this.extra.backend} process disconnected unexpectedly ` +
-      `(code: ${error.code}, signal: ${error.signal}). ` +
-      `Please try sending a new message to reconnect.`;
+      `${this.extra.backend} 进程意外断开 ` +
+      `(code: ${error.code}, signal: ${error.signal})。` +
+      `系统会在后台自动重试恢复。`;
     this.emitErrorMessage(errorMsg);
 
     // 3. Emit finish signal to reset UI loading state
@@ -1087,6 +1012,10 @@ export class AcpAgent {
     this.approvalStore.clear();
     this.pendingNavigationTools.clear();
     this.statusMessageId = null;
+
+    if (!this.suppressAutoRecovery) {
+      this.scheduleAutoRecovery(errorMsg, false);
+    }
   }
 
   private handleFileOperation(operation: { method: string; path: string; content?: string; sessionId: string }): void {
@@ -1195,20 +1124,225 @@ export class AcpAgent {
     }
   }
 
-  private emitErrorMessage(error: string): void {
-    const errorMessage: TMessage = {
+  private emitTipMessage(content: string, type: 'error' | 'info' = 'error'): void {
+    const tipMessage: TMessage = {
       id: uuid(),
       conversation_id: this.id,
       type: 'tips',
       position: 'center',
       createdAt: Date.now(),
       content: {
-        content: error,
-        type: 'error',
+        content,
+        type,
       },
     };
 
-    this.emitMessage(errorMessage);
+    this.emitMessage(tipMessage);
+  }
+
+  private emitErrorMessage(error: string): void {
+    this.emitTipMessage(error, 'error');
+  }
+
+  private async startInternal(): Promise<void> {
+    const startTotal = Date.now();
+    try {
+      this.emitStatusMessage('connecting');
+
+      let connectTimeoutId: NodeJS.Timeout | null = null;
+      const connectTimeoutPromise = new Promise<never>((_, reject) => {
+        connectTimeoutId = setTimeout(() => reject(new Error('Connection timeout after 70 seconds')), 70000);
+      });
+
+      const connectStart = Date.now();
+      try {
+        const tryConnect = async () => {
+          await Promise.race([
+            this.connection.connect(
+              this.extra.backend,
+              this.extra.cliPath,
+              this.extra.workspace,
+              this.extra.customArgs,
+              this.extra.customEnv
+            ),
+            connectTimeoutPromise,
+          ]);
+        };
+
+        try {
+          await tryConnect();
+        } catch (firstError) {
+          // Transient startup failures (env race / process warmup) are common on first try.
+          // Retry once after a short backoff to reduce "need multiple clicks to connect".
+          console.warn(
+            '[ACP] First connect attempt failed, retrying once:',
+            firstError instanceof Error ? firstError.message : String(firstError)
+          );
+          await this.connection.disconnect();
+          await new Promise((resolve) => setTimeout(resolve, 300));
+          await tryConnect();
+        }
+      } finally {
+        if (connectTimeoutId) {
+          clearTimeout(connectTimeoutId);
+        }
+      }
+      if (ACP_PERF_LOG) console.log(`[ACP-PERF] start: connection.connect() completed ${Date.now() - connectStart}ms`);
+
+      this.emitStatusMessage('connected');
+
+      const authStart = Date.now();
+      await this.performAuthentication();
+      if (ACP_PERF_LOG) console.log(`[ACP-PERF] start: authentication completed ${Date.now() - authStart}ms`);
+
+      // 避免重复创建会话：仅当尚无活动会话时再创建
+      // Create new session or resume existing one (if ACP backend supports it)
+      if (!this.connection.hasActiveSession) {
+        const sessionStart = Date.now();
+        await this.createOrResumeSession();
+        if (ACP_PERF_LOG) console.log(`[ACP-PERF] start: session created ${Date.now() - sessionStart}ms`);
+      }
+
+      // YOLO mode: bypass all permission checks for supported backends
+      if (this.extra.yoloMode) {
+        const yoloModeMap: Partial<Record<AcpBackend, string>> = {
+          claude: CLAUDE_YOLO_SESSION_MODE,
+          codebuddy: CODEBUDDY_YOLO_SESSION_MODE,
+          qwen: QWEN_YOLO_SESSION_MODE,
+          iflow: IFLOW_YOLO_SESSION_MODE,
+        };
+        const sessionMode = yoloModeMap[this.extra.backend];
+        if (sessionMode) {
+          try {
+            const modeStart = Date.now();
+            await this.connection.setSessionMode(sessionMode);
+            if (ACP_PERF_LOG) console.log(`[ACP-PERF] start: session mode set ${Date.now() - modeStart}ms`);
+          } catch (error) {
+            const errorMessage = error instanceof Error ? error.message : String(error);
+            throw new Error(
+              `[ACP] Failed to enable ${this.extra.backend} YOLO mode (${sessionMode}): ${errorMessage}`,
+              { cause: error }
+            );
+          }
+        }
+      }
+
+      // Apply model from ~/.claude/settings.json for Claude backend.
+      // claude-agent-acp may default to a region-mismatched Bedrock model;
+      // explicitly setting the model from settings ensures correctness.
+      // Uses session/set_model (direct CLI control) for consistency with runtime switching.
+      if (this.extra.backend === 'claude') {
+        const configuredModel = getClaudeModel();
+        if (configuredModel) {
+          try {
+            const modelStart = Date.now();
+            await this.connection.setModel(configuredModel);
+            if (ACP_PERF_LOG) console.log(`[ACP-PERF] start: model set ${Date.now() - modelStart}ms`);
+          } catch (error) {
+            const errMsg = error instanceof Error ? error.message : String(error);
+            console.warn(`[ACP] Failed to set model from settings: ${errMsg}`);
+            // Detect third-party relay/proxy errors (e.g., NewAPI/OneAPI "model_not_found").
+            // These services route by model name and may not have channels configured for
+            // specific model IDs like "claude-sonnet-4-6". Emit a visible warning so the
+            // user knows to update their relay's model configuration.
+            if (errMsg.includes('model_not_found') || errMsg.includes('无可用渠道')) {
+              this.emitErrorMessage(
+                `Model "${configuredModel}" is not available on your API relay service. ` +
+                  `Please add this model to your relay's channel configuration, ` +
+                  `or update ANTHROPIC_MODEL in ~/.claude/settings.json to a supported model name. ` +
+                  `Falling back to the relay's default model.`
+              );
+            }
+          }
+        }
+      }
+
+      // Emit initial model info after session setup completes
+      this.emitModelInfo();
+
+      this.emitStatusMessage('session_active');
+      this.resetAutoRecoveryState();
+      if (ACP_PERF_LOG) console.log(`[ACP-PERF] start: total ${Date.now() - startTotal}ms`);
+    } catch (error) {
+      if (ACP_PERF_LOG) console.log(`[ACP-PERF] start: failed after ${Date.now() - startTotal}ms`);
+      this.emitStatusMessage('error');
+      if (!this.suppressAutoRecovery && shouldAutoRecoverAcpErrorMessage(error)) {
+        this.scheduleAutoRecovery(error instanceof Error ? error.message : String(error));
+      }
+      throw error;
+    }
+  }
+
+  private clearAutoRecoveryTimer(): void {
+    if (!this.autoRecoveryTimer) {
+      return;
+    }
+    clearTimeout(this.autoRecoveryTimer);
+    this.autoRecoveryTimer = null;
+  }
+
+  private resetAutoRecoveryState(): void {
+    this.clearAutoRecoveryTimer();
+    this.autoRecoveryAttempt = 0;
+    this.autoRecoveryInFlight = false;
+  }
+
+  private scheduleAutoRecovery(reason: string, announce = true): void {
+    if (this.suppressAutoRecovery || this.autoRecoveryTimer || this.autoRecoveryInFlight) {
+      return;
+    }
+
+    if (this.autoRecoveryAttempt >= ACP_AUTO_RECOVERY_MAX_ATTEMPTS) {
+      this.emitErrorMessage(
+        `${this.extra.backend} 在后台自动恢复 ${ACP_AUTO_RECOVERY_MAX_ATTEMPTS} 次后仍然失败。` +
+          `你不需要重启 App；下一次发送消息时，系统还会再次尝试重连。` +
+          `最近一次错误：${reason}`
+      );
+      return;
+    }
+
+    const nextAttempt = this.autoRecoveryAttempt + 1;
+    const delayMs = getAcpAutoRecoveryDelayMs(nextAttempt);
+    this.autoRecoveryAttempt = nextAttempt;
+    this.autoRecoveryTimer = setTimeout(() => {
+      this.autoRecoveryTimer = null;
+      void this.runAutoRecoveryAttempt();
+    }, delayMs);
+
+    if (announce) {
+      this.emitErrorMessage(
+        `${this.extra.backend} 连接卡住了，系统将在 ${Math.ceil(delayMs / 1000)} 秒后自动重试 ` +
+          `(${nextAttempt}/${ACP_AUTO_RECOVERY_MAX_ATTEMPTS})。`
+      );
+    }
+  }
+
+  private async runAutoRecoveryAttempt(): Promise<void> {
+    if (
+      this.suppressAutoRecovery ||
+      this.autoRecoveryInFlight ||
+      this.startPromise ||
+      (this.connection.isConnected && this.connection.hasActiveSession)
+    ) {
+      return;
+    }
+
+    this.autoRecoveryInFlight = true;
+    try {
+      await this.start();
+      this.emitTipMessage(`${this.extra.backend} 已自动恢复，你不需要重启 App。`, 'info');
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      this.autoRecoveryInFlight = false;
+      if (shouldAutoRecoverAcpErrorMessage(error)) {
+        this.scheduleAutoRecovery(errorMessage);
+        return;
+      }
+      this.autoRecoveryAttempt = ACP_AUTO_RECOVERY_MAX_ATTEMPTS;
+      this.emitErrorMessage(`${this.extra.backend} 自动恢复失败：${errorMessage}`);
+    } finally {
+      this.autoRecoveryInFlight = false;
+    }
   }
 
   private extractThoughtSubject(content: string): string {

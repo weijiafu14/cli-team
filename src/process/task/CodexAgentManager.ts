@@ -308,6 +308,17 @@ class CodexAgentManager extends BaseAgentManager<CodexAgentManagerData> implemen
     } catch (e) {
       cronBusyGuard.setProcessing(this.conversation_id, false);
       this.status = 'finished';
+
+      // Report error to AutoCompactionOrchestrator for session health tracking
+      try {
+        const errStr = e instanceof Error ? e.message : String(e);
+        const { getAutoCompactionOrchestrator } =
+          require('@process/services/autoCompaction') as typeof import('@process/services/autoCompaction');
+        getAutoCompactionOrchestrator().reportError(this.conversation_id, errStr);
+      } catch {
+        // autoCompaction not loaded yet — skip
+      }
+
       // 对于某些错误类型，避免重复错误消息处理
       // 这些错误通常已经通过 MCP 连接的事件流处理过了
       const errorMsg = e instanceof Error ? e.message : String(e);
@@ -607,6 +618,55 @@ class CodexAgentManager extends BaseAgentManager<CodexAgentManagerData> implemen
       }
       ipcBridge.codexConversation.responseStream.emit(message);
       channelEventBus.emitAgentMessage(this.conversation_id, message);
+      return;
+    }
+
+    // Intercept codex_token_count: forward to AutoCompactionOrchestrator
+    if (message.type === 'codex_token_count') {
+      const tokenData = message.data as {
+        info?: {
+          total_token_usage?: { total_tokens?: number };
+          model_context_window?: number;
+        };
+      };
+      const used = tokenData?.info?.total_token_usage?.total_tokens ?? 0;
+      const limit = tokenData?.info?.model_context_window ?? 0;
+      if (used > 0 && limit > 0) {
+        const { getAutoCompactionOrchestrator } =
+          require('@process/services/autoCompaction') as typeof import('@process/services/autoCompaction');
+        const orchestrator = getAutoCompactionOrchestrator();
+
+        // Register per-conversation compact/rollover actions
+        if (!orchestrator.hasActions(this.conversation_id)) {
+          const agentRef = this.agent;
+          const convId = this.conversation_id;
+          orchestrator.registerConversationActions(convId, {
+            compact: async () => {
+              if (agentRef) {
+                console.log(`[AutoCompaction] Sending /compact to Codex (${convId})`);
+                await agentRef.sendPrompt('/compact');
+                return true;
+              }
+              return false;
+            },
+            rollover: async () => {
+              if (agentRef) {
+                console.log(`[AutoCompaction] Sending /compact (rollover) to Codex (${convId})`);
+                await agentRef.sendPrompt('/compact Preserve all working conclusions, pending tasks, and key context.');
+                return true;
+              }
+              return false;
+            },
+          });
+        }
+
+        orchestrator.reportUsage({
+          conversationId: this.conversation_id,
+          provider: 'codex',
+          used,
+          limit,
+        });
+      }
       return;
     }
 
