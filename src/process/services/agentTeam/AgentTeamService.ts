@@ -341,7 +341,7 @@ export class AgentTeamService {
     if (input.interrupt) {
       const dispatcher = this.dispatchers.get(input.conversationId);
       if (dispatcher) {
-        dispatcher.interruptMembers(input.targets);
+        await dispatcher.interruptMembers(input.targets);
       } else {
         const targetConversationIds =
           input.targets && input.targets.length > 0
@@ -355,9 +355,7 @@ export class AgentTeamService {
                 .map((member) => member.conversationId)
             : team.members.map((member) => member.conversationId);
 
-        for (const targetConversationId of targetConversationIds) {
-          this.workerTaskManager.kill(targetConversationId);
-        }
+        await Promise.all(targetConversationIds.map((targetConversationId) => this.stopAndKillTask(targetConversationId)));
       }
     }
 
@@ -471,6 +469,18 @@ export class AgentTeamService {
       } as Partial<TChatConversation>,
       false
     );
+  }
+
+  private async stopAndKillTask(conversationId: string): Promise<void> {
+    const task = this.workerTaskManager.getTask(conversationId);
+    if (task) {
+      try {
+        await task.stop();
+      } catch (error) {
+        console.warn(`[AgentTeamService] Failed to stop task before interrupt for ${conversationId}:`, error);
+      }
+    }
+    this.workerTaskManager.kill(conversationId);
   }
 
   private async resolveWorkspace(
@@ -819,15 +829,16 @@ The completion message should either:
 
 ## Knowledge Sedimentation
 
-The workspace \`docs/tech/agent-team/\` is the team's canonical memory. It MUST be organized as a **hierarchical tree structure** with nested sub-directories (e.g., \`pitfalls/frontend/react/\`) to facilitate efficient agent navigation and retrieval. It contains:
+The workspace \`docs/tech/agent-team/\` is the team's canonical memory. It MUST be organized as a **hierarchical tree structure** with nested sub-directories (e.g., \`pitfalls/frontend/react/\`) to facilitate efficient agent navigation and retrieval. It contains exclusively four top-level directories:
 - \`decisions/\`: Architectural choices and rationale.
 - \`pitfalls/\`: Discovered traps, anti-patterns, and bug postmortems.
-- \`workflows/\`: Standard operating procedures.
+- \`workflows/\`: Standard operating procedures (including docs governance).
 - \`glossary/\`: Domain terminology.
 
 Rules:
 1. **Consult before implementation:** If a task relates to an established area, you MUST consult the relevant documents in the \`docs/tech/agent-team/\` tree before writing code or proposing a design.
-2. **Land before done:** If your task resolves a complex bug, establishes a new pattern, or makes an architectural decision, you MUST land durable decisions/pitfalls/workflows back into the \`docs/tech/agent-team/\` tree before declaring the task \`done\`. Create necessary sub-directories to maintain the tree structure and keep files small and focused.
+2. **Land before done:** If your task resolves a complex bug, establishes a new pattern, or makes an architectural decision, you MUST land durable decisions/pitfalls/workflows back into the \`docs/tech/agent-team/\` tree before declaring the task \`done\`. Create necessary sub-directories to maintain the tree structure and keep files small and focused to avoid context window exhaustion.
+3. **Evolve the framework:** The team must maintain guidelines in \`docs/tech/agent-team/workflows/docs-governance/\` on how to effectively document experience for this specific project.
 
 ## Collaboration Rule
 
