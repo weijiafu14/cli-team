@@ -343,6 +343,8 @@ export class CoordDispatcher {
         console.log(`[CoordDispatcher] Session poisoned for ${state.member.name}, resetting before dispatch`);
         // Interrupt the member to force a fresh session on next getOrBuildTask
         await this.interruptMembers([state.member.memberId]);
+        // Clear both poisoned state AND stale action closures so the new agent can re-register
+        orchestrator.removeState(state.member.conversationId);
         orchestrator.clearPoisonedState(state.member.conversationId);
       }
     } catch {
