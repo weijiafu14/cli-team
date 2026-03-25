@@ -72,20 +72,20 @@ const CollapsibleBody: React.FC<{ children: React.ReactNode }> = ({ children }) 
   useEffect(() => {
     if (!contentRef.current) return;
     const el = contentRef.current;
-    
+
     const checkOverflow = () => {
       if (el.scrollHeight > 300) {
         setIsOverflowing(true);
       }
     };
-    
+
     // Check initially
     checkOverflow();
-    
+
     // 1. Observe size changes
     const resizeObserver = new ResizeObserver(() => checkOverflow());
     resizeObserver.observe(el);
-    
+
     // 2. Observe DOM mutations (useful for MarkdownView async rendering shadow DOM or inner HTML)
     const mutationObserver = new MutationObserver(() => checkOverflow());
     mutationObserver.observe(el, { childList: true, subtree: true, characterData: true, attributes: true });
@@ -93,7 +93,7 @@ const CollapsibleBody: React.FC<{ children: React.ReactNode }> = ({ children }) 
     // 3. Fallback polling for the first 2 seconds to catch any delayed image loads or complex math rendering
     const intervalId = setInterval(checkOverflow, 200);
     const timeoutId = setTimeout(() => clearInterval(intervalId), 2000);
-    
+
     return () => {
       resizeObserver.disconnect();
       mutationObserver.disconnect();
@@ -104,24 +104,22 @@ const CollapsibleBody: React.FC<{ children: React.ReactNode }> = ({ children }) 
 
   return (
     <div className='relative'>
-      <div 
+      <div
         ref={wrapperRef}
-        style={{ 
-          maxHeight: expanded ? 'none' : '300px', 
+        style={{
+          maxHeight: expanded ? 'none' : '300px',
           overflow: 'hidden',
-          transition: 'max-height 0.3s ease'
+          transition: 'max-height 0.3s ease',
         }}
       >
-        <div ref={contentRef}>
-          {children}
-        </div>
+        <div ref={contentRef}>{children}</div>
       </div>
       {!expanded && isOverflowing && (
-        <div 
+        <div
           className='absolute bottom-0 left-0 right-0 h-80px flex items-end justify-center pb-8px'
           style={{ background: 'linear-gradient(to bottom, transparent, var(--color-bg-2) 80%)' }}
         >
-          <button 
+          <button
             type='button'
             className='px-12px py-4px rd-16px text-12px bg-fill-2 hover:bg-fill-3 text-t-2 border-none cursor-pointer transition-colors shadow-sm'
             onClick={() => setExpanded(true)}
@@ -132,7 +130,7 @@ const CollapsibleBody: React.FC<{ children: React.ReactNode }> = ({ children }) 
       )}
       {expanded && isOverflowing && (
         <div className='flex justify-center mt-8px'>
-          <button 
+          <button
             type='button'
             className='px-12px py-4px rd-16px text-12px bg-fill-2 hover:bg-fill-3 text-t-2 border-none cursor-pointer transition-colors'
             onClick={() => setExpanded(false)}
@@ -143,7 +141,7 @@ const CollapsibleBody: React.FC<{ children: React.ReactNode }> = ({ children }) 
       )}
     </div>
   );
-}
+};
 
 function mergeTimelineEntries(
   prev: ICoordTimelineEntry[],
@@ -454,16 +452,20 @@ export default function AgentTeamChat({ conversation_id, workspace }: AgentTeamC
     [conversation_id, pendingFiles, memberList]
   );
 
+  const contextValue = useMemo(() => ({ conversationId: conversation_id, workspace, type: 'agent-team' as const }), [conversation_id, workspace]);
+
   return (
-    <ConversationProvider value={{ conversationId: conversation_id, workspace, type: 'agent-team' }}>
+    <ConversationProvider value={contextValue}>
       <div className={styles.container}>
         <div className={styles.header}>
           <div className={styles.headerLeft}>
             <div className={styles.headerTitle} style={{ fontSize: '13px', display: 'flex', alignItems: 'center' }}>
-              <span className='font-medium'>Agent Team</span> 
-              <span className='text-12px text-t-3 font-normal ml-8px px-6px py-2px bg-fill-2 rd-4px'>{workspaceLabel}</span>
+              <span className='font-medium'>Agent Team</span>
+              <span className='text-12px text-t-3 font-normal ml-8px px-6px py-2px bg-fill-2 rd-4px'>
+                {workspaceLabel}
+              </span>
             </div>
-            
+
             <div className={styles.tabBar} style={{ padding: 0, border: 'none', marginLeft: '12px' }}>
               <button
                 type='button'
@@ -485,11 +487,7 @@ export default function AgentTeamChat({ conversation_id, workspace }: AgentTeamC
 
         {activeTab === 'timeline' ? (
           <div ref={timelineRef} className={styles.timeline}>
-            <TimelineList
-              timeline={timeline}
-              memberMap={memberMap}
-              handleRichContentReady={handleRichContentReady}
-            />
+            <TimelineList timeline={timeline} memberMap={memberMap} handleRichContentReady={handleRichContentReady} />
           </div>
         ) : (
           <AgentsMembersView conversation_id={conversation_id} />
@@ -534,6 +532,7 @@ export default function AgentTeamChat({ conversation_id, workspace }: AgentTeamC
             disabled={sending}
             placeholder='输入 @ 指定分配工作，或直接发送消息给全队...'
             defaultMultiLine
+            lockMultiLine
             onFilesAdded={handleFilesAdded}
             tools={
               <>
@@ -595,12 +594,12 @@ const TimelineList = React.memo(function TimelineList({
               {logoSrc ? (
                 <img src={logoSrc} alt='' className={styles.entryLogo} />
               ) : (
-                <div className={styles.entryUserIcon}>
-                  {entry.role === 'user' ? 'U' : <SettingConfig />}
-                </div>
+                <div className={styles.entryUserIcon}>{entry.role === 'user' ? 'U' : <SettingConfig />}</div>
               )}
               <span className={styles.entryFrom}>{displayName}</span>
-              <span className={styles.entryType} style={getTypeBadgeStyle(entry.type)}>{entry.type}</span>
+              <span className={styles.entryType} style={getTypeBadgeStyle(entry.type)}>
+                {entry.type}
+              </span>
               {dispatchLabel && <span className={styles.entryDispatch}>{dispatchLabel}</span>}
               <span className={styles.entryTime}>{new Date(entry.ts).toLocaleTimeString()}</span>
             </div>
@@ -613,7 +612,11 @@ const TimelineList = React.memo(function TimelineList({
               ))}
             </div>
             {(entry as any).attachment?.path ? (
-              <MarkdownAttachment key={(entry as any).attachment.path} path={(entry as any).attachment.path} onReady={handleRichContentReady} />
+              <MarkdownAttachment
+                key={(entry as any).attachment.path}
+                path={(entry as any).attachment.path}
+                onReady={handleRichContentReady}
+              />
             ) : entry.body ? (
               <div className={styles.entryBody}>
                 <CollapsibleBody>
