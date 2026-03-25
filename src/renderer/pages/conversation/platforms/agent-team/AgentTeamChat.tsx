@@ -198,7 +198,7 @@ function MarkdownAttachment({ path: filePath, onReady }: { path: string; onReady
   return (
     <div className={styles.entryBody}>
       <CollapsibleBody>
-        <MarkdownView>{content}</MarkdownView>
+        <MarkdownView>{content.replace(/\\n/g, '\n')}</MarkdownView>
       </CollapsibleBody>
     </div>
   );
@@ -256,8 +256,21 @@ export default function AgentTeamChat({ conversation_id, workspace }: AgentTeamC
   const scrollBehaviorRef = useRef<'smooth' | 'auto'>('auto');
   const keepPinnedToBottomRef = useRef(false);
   const keepPinnedTimerRef = useRef<number | null>(null);
+  const [hasNewMessages, setHasNewMessages] = useState(false);
+  const isNearBottomRef = useRef(true);
+
+  const checkNearBottom = useCallback(() => {
+    if (!timelineRef.current) return true;
+    const { scrollTop, scrollHeight, clientHeight } = timelineRef.current;
+    return scrollHeight - scrollTop - clientHeight < 100;
+  }, []);
 
   const requestTimelineScroll = useCallback((behavior: 'smooth' | 'auto') => {
+    // Only auto-scroll if user is near the bottom
+    if (!isNearBottomRef.current) {
+      setHasNewMessages(true);
+      return;
+    }
     scrollBehaviorRef.current = behavior;
     shouldAutoScrollRef.current = true;
     keepPinnedToBottomRef.current = true;
@@ -268,6 +281,17 @@ export default function AgentTeamChat({ conversation_id, workspace }: AgentTeamC
       keepPinnedToBottomRef.current = false;
       keepPinnedTimerRef.current = null;
     }, 900);
+  }, []);
+
+  const scrollTimelineToBottom = useCallback(() => {
+    setHasNewMessages(false);
+    isNearBottomRef.current = true;
+    if (timelineRef.current) {
+      timelineRef.current.scrollTo({
+        top: timelineRef.current.scrollHeight,
+        behavior: 'smooth',
+      });
+    }
   }, []);
 
   const handleRichContentReady = useCallback(() => {
@@ -486,8 +510,26 @@ export default function AgentTeamChat({ conversation_id, workspace }: AgentTeamC
         </div>
 
         {activeTab === 'timeline' ? (
-          <div ref={timelineRef} className={styles.timeline}>
+          <div
+            ref={timelineRef}
+            className={styles.timeline}
+            onScroll={() => {
+              isNearBottomRef.current = checkNearBottom();
+              if (isNearBottomRef.current) {
+                setHasNewMessages(false);
+              }
+            }}
+          >
             <TimelineList timeline={timeline} memberMap={memberMap} handleRichContentReady={handleRichContentReady} />
+            {hasNewMessages && (
+              <button
+                type='button'
+                className={styles.newMessagesButton}
+                onClick={scrollTimelineToBottom}
+              >
+                New messages ↓
+              </button>
+            )}
           </div>
         ) : (
           <AgentsMembersView conversation_id={conversation_id} />
@@ -620,7 +662,7 @@ const TimelineList = React.memo(function TimelineList({
             ) : entry.body ? (
               <div className={styles.entryBody}>
                 <CollapsibleBody>
-                  <MarkdownView>{entry.body}</MarkdownView>
+                  <MarkdownView>{entry.body.replace(/\\n/g, '\n')}</MarkdownView>
                 </CollapsibleBody>
               </div>
             ) : null}
