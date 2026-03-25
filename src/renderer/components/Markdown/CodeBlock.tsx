@@ -8,6 +8,7 @@ import SyntaxHighlighter from 'react-syntax-highlighter';
 import { vs, vs2015 } from 'react-syntax-highlighter/dist/esm/styles/hljs';
 
 import katex from 'katex';
+import mermaid from 'mermaid';
 
 import { copyText } from '@/renderer/utils/ui/clipboard';
 import { Message } from '@arco-design/web-react';
@@ -15,6 +16,49 @@ import { Copy, Down, Up } from '@icon-park/react';
 import React, { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { formatCode, getDiffLineStyle, logicRender } from './markdownUtils';
+
+const MermaidBlock = ({ chart, theme }: { chart: string; theme: 'light' | 'dark' }) => {
+  const [svgContent, setSvgContent] = useState<string>('');
+  const [error, setError] = useState<string>('');
+  const mermaidId = useMemo(() => `mermaid-${Math.random().toString(36).substr(2, 9)}`, []);
+
+  React.useEffect(() => {
+    let isMounted = true;
+    try {
+      mermaid.initialize({ startOnLoad: false, theme: theme === 'dark' ? 'dark' : 'default' });
+      mermaid.render(mermaidId, chart).then((result) => {
+        if (isMounted) {
+          setSvgContent(result.svg);
+          setError('');
+        }
+      }).catch((e) => {
+        if (isMounted) {
+          setError(e.message || String(e));
+        }
+      });
+    } catch (e: any) {
+      if (isMounted) {
+        setError(e.message || String(e));
+      }
+    }
+    return () => { isMounted = false; };
+  }, [chart, theme, mermaidId]);
+
+  return (
+    <div style={{ padding: '16px', background: 'var(--bg-1)', borderRadius: '8px', overflowX: 'auto', display: 'flex', justifyContent: 'center', border: '1px solid var(--bg-3)' }}>
+      {error ? (
+        <div style={{ color: 'var(--color-danger-6)', textAlign: 'left', width: '100%' }}>
+          <div style={{ fontWeight: 'bold', marginBottom: '8px' }}>Mermaid Syntax Error:</div>
+          <pre style={{ fontSize: '12px', whiteSpace: 'pre-wrap', wordBreak: 'break-all' }}>{error}</pre>
+        </div>
+      ) : svgContent ? (
+        <div dangerouslySetInnerHTML={{ __html: svgContent }} />
+      ) : (
+        <div style={{ color: 'var(--text-3)' }}>Rendering diagram...</div>
+      )}
+    </div>
+  );
+};
 
 type CodeBlockProps = {
   children: string;
@@ -76,6 +120,10 @@ function CodeBlock(props: CodeBlockProps) {
           // Fall through to render as code block if KaTeX fails
         }
       }
+    }
+
+    if (language === 'mermaid') {
+      return <MermaidBlock chart={String(children)} theme={currentTheme} />;
     }
 
     if (!String(children).includes('\n')) {
