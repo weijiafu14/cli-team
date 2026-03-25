@@ -665,6 +665,60 @@ export class GeminiAgentManager extends BaseAgentManager<
         });
       }
 
+      // Forward gemini_context_overflow to AutoCompactionOrchestrator
+      if (data.type === 'gemini_context_overflow') {
+        const overflowData = data.data as {
+          estimatedRequestTokenCount: number;
+          remainingTokenCount: number;
+        };
+        const used = overflowData.estimatedRequestTokenCount;
+        const limit = used + overflowData.remainingTokenCount;
+        if (used > 0 && limit > 0) {
+          const { getAutoCompactionOrchestrator } =
+            require('@process/services/autoCompaction') as typeof import('@process/services/autoCompaction');
+          const orchestrator = getAutoCompactionOrchestrator();
+
+          // Register per-conversation compact/rollover actions
+          if (!orchestrator.hasActions(this.conversation_id)) {
+            const convId = this.conversation_id;
+            orchestrator.registerConversationActions(convId, {
+              compact: async () => {
+                console.log(`[AutoCompaction] Sending /compress to Gemini worker (${convId})`);
+                try {
+                  await this.sendMessage({
+                    input: '/compress',
+                    msg_id: `auto-compact-${Date.now()}`,
+                  });
+                  return true;
+                } catch {
+                  return false;
+                }
+              },
+              rollover: async () => {
+                console.log(`[AutoCompaction] Sending /compress (rollover) to Gemini worker (${convId})`);
+                try {
+                  await this.sendMessage({
+                    input: '/compress',
+                    msg_id: `auto-rollover-${Date.now()}`,
+                  });
+                  return true;
+                } catch {
+                  return false;
+                }
+              },
+            });
+          }
+
+          orchestrator.reportUsage({
+            conversationId: this.conversation_id,
+            provider: 'gemini',
+            used,
+            limit,
+          });
+        }
+        return;
+      }
+
       // 处理预览打开事件（chrome-devtools 导航触发）/ Handle preview open event (triggered by chrome-devtools navigation)
       if (handlePreviewOpenEvent(data)) {
         return; // 不需要继续处理 / No need to continue processing

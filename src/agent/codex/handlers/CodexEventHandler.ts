@@ -65,6 +65,16 @@ export class CodexEventHandler {
       return;
     }
     if (type === 'token_count') {
+      const tokenMsg = msg as Extract<CodexEventMsg, { type: 'token_count' }>;
+      this.messageEmitter.emitAndPersistMessage(
+        {
+          type: 'codex_token_count',
+          msg_id: uuid(),
+          conversation_id: this.conversation_id,
+          data: tokenMsg,
+        },
+        false
+      );
       return;
     }
     if (type === 'task_started') {

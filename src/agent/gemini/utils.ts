@@ -231,6 +231,12 @@ export const processGeminiStreamEvents = async (
               type: ServerGeminiEventType.Error,
               data: `Context window overflow: Request size (${estimatedK}K tokens) exceeds model capacity (${remainingK}K tokens). Try: 1) Start a new conversation, 2) Reduce workspace files, 3) Clear conversation history, or 4) Use smaller files.`,
             });
+
+            // Emit structured overflow data for AutoCompactionOrchestrator
+            onStreamEvent({
+              type: 'gemini_context_overflow',
+              data: { estimatedRequestTokenCount: estimated, remainingTokenCount: remaining },
+            });
           }
           break;
         case ServerGeminiEventType.AgentExecutionStopped: {

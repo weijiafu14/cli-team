@@ -340,6 +340,46 @@ class AcpAgentManager extends BaseAgentManager<AcpAgentManagerData, AcpPermissio
           if (message.type === 'acp_context_usage') {
             const usageData = message.data as { used: number; size: number };
             this.saveContextUsage(usageData);
+
+            // Forward to AutoCompactionOrchestrator for threshold monitoring
+            if (usageData.used > 0 && usageData.size > 0) {
+              const { getAutoCompactionOrchestrator } =
+                require('@process/services/autoCompaction') as typeof import('@process/services/autoCompaction');
+              const orchestrator = getAutoCompactionOrchestrator();
+
+              // Register per-conversation compact/rollover actions (bound to this agent instance)
+              if (!orchestrator.hasActions(data.conversation_id)) {
+                const agentRef = this.agent;
+                orchestrator.registerConversationActions(data.conversation_id, {
+                  compact: async () => {
+                    if (agentRef) {
+                      console.log(`[AutoCompaction] Sending /compact to ACP (${data.conversation_id})`);
+                      await agentRef.sendMessage({ content: '/compact' });
+                      return true;
+                    }
+                    return false;
+                  },
+                  rollover: async () => {
+                    if (agentRef) {
+                      console.log(`[AutoCompaction] Sending /compact (rollover) to ACP (${data.conversation_id})`);
+                      await agentRef.sendMessage({
+                        content:
+                          '/compact Preserve all working conclusions, pending tasks, key file paths, and user constraints.',
+                      });
+                      return true;
+                    }
+                    return false;
+                  },
+                });
+              }
+
+              orchestrator.reportUsage({
+                conversationId: data.conversation_id,
+                provider: 'acp',
+                used: usageData.used,
+                limit: usageData.size,
+              });
+            }
           }
 
           if (message.type !== 'thought' && message.type !== 'acp_model_info' && message.type !== 'acp_context_usage') {
@@ -440,6 +480,15 @@ class AcpAgentManager extends BaseAgentManager<AcpAgentManagerData, AcpPermissio
           if (v.type === 'finish') {
             this.status = 'finished';
             cronBusyGuard.setProcessing(this.conversation_id, false);
+
+            // Report success to clear session health error tracking
+            try {
+              const { getAutoCompactionOrchestrator } =
+                require('@process/services/autoCompaction') as typeof import('@process/services/autoCompaction');
+              getAutoCompactionOrchestrator().reportSuccess(data.conversation_id);
+            } catch {
+              // autoCompaction not loaded yet — skip
+            }
           }
 
           // Process cron commands when turn ends (finish signal)
@@ -591,6 +640,13 @@ class AcpAgentManager extends BaseAgentManager<AcpAgentManagerData, AcpPermissio
       await this.initAgent(this.options);
       if (ACP_PERF_LOG) console.log(`[ACP-PERF] manager: initAgent completed ${Date.now() - initStart}ms`);
 
+      // Downscale oversized images before sending to prevent dimension limit errors
+      if (data.files && data.files.length > 0) {
+        const { downscaleImageIfNeeded } =
+          require('@process/services/autoCompaction') as typeof import('@process/services/autoCompaction');
+        data.files = await Promise.all(data.files.map((f) => downscaleImageIfNeeded(f)));
+      }
+
       if (data.msg_id && data.content) {
         let contentToSend = data.content;
         if (contentToSend.includes(AIONUI_FILES_MARKER)) {
@@ -630,6 +686,17 @@ class AcpAgentManager extends BaseAgentManager<AcpAgentManagerData, AcpPermissio
       this.flushBufferedStreamTextMessages();
       cronBusyGuard.setProcessing(this.conversation_id, false);
       this.status = 'finished';
+
+      // Report error to AutoCompactionOrchestrator for session health tracking
+      try {
+        const errorMsg = e instanceof Error ? e.message : String(e);
+        const { getAutoCompactionOrchestrator } =
+          require('@process/services/autoCompaction') as typeof import('@process/services/autoCompaction');
+        getAutoCompactionOrchestrator().reportError(this.conversation_id, errorMsg);
+      } catch {
+        // autoCompaction not loaded yet — skip
+      }
+
       const message: IResponseMessage = {
         type: 'error',
         conversation_id: this.conversation_id,
