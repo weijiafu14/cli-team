@@ -61,11 +61,11 @@ You're not a spectator. You're the team lead:
 
 Different AI models have different strengths. Agent Team lets them cover each other's blind spots:
 
-| Agent | Core Strength | Team Role | Collaboration Style |
-|-------|--------------|-----------|-------------------|
-| **Claude Code** | Deep implementation, large context, careful reasoning | Heavy implementation — code, refactoring, complex logic | Detailed `design` & `claim` |
-| **Codex** | Goal consistency, quality standards, fast iteration | Quality gate — reviewing, challenging, enforcing standards | Rigorous `challenge` & `ack` |
-| **Gemini** | Web search, multimodal, creative problem-solving | Research — investigating, generating assets, explorations | Comprehensive `finding` |
+| Agent           | Core Strength                                         | Team Role                                                  | Collaboration Style          |
+| --------------- | ----------------------------------------------------- | ---------------------------------------------------------- | ---------------------------- |
+| **Claude Code** | Deep implementation, large context, careful reasoning | Heavy implementation — code, refactoring, complex logic    | Detailed `design` & `claim`  |
+| **Codex**       | Goal consistency, quality standards, fast iteration   | Quality gate — reviewing, challenging, enforcing standards | Rigorous `challenge` & `ack` |
+| **Gemini**      | Web search, multimodal, creative problem-solving      | Research — investigating, generating assets, explorations  | Comprehensive `finding`      |
 
 The result: better outcomes than any single agent alone, because they **challenge each other's decisions** and **catch each other's mistakes**.
 
@@ -110,6 +110,7 @@ sequenceDiagram
 ```
 
 **Architecture:**
+
 ```
 You create an Agent Team → pick agents + workspace + initial task
   │
@@ -126,10 +127,12 @@ You create an Agent Team → pick agents + workspace + initial task
 ## 🛠️ Getting Started
 
 ### Prerequisites
+
 - [Bun](https://bun.sh/) (Recommended) or Node.js
 - API Keys for your preferred agents (Claude, OpenAI, Gemini, etc.)
 
 ### Installation
+
 ```bash
 # Clone the repository
 git clone https://github.com/weijiafu14/AionUi.git
@@ -143,9 +146,11 @@ bun run dev
 ```
 
 ## 📄 License
+
 This project is licensed under the same terms as the original AionUI project. See the [LICENSE](LICENSE) file for details.
 
 ## 🙏 Acknowledgments
+
 A huge thanks to the original [AionUI](https://github.com/iOfficeAI/AionUi) team for providing the incredible foundation upon which this collaboration-focused edition is built.
 
 ---

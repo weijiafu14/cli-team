@@ -94,11 +94,13 @@ function extractContentFromSessionFile(conversation: unknown): Array<{ role: str
   for (const msg of conv.messages) {
     const type = msg.type as string;
     const rawContent = msg.content;
-    const toolCalls = msg.toolCalls as Array<{
-      name: string;
-      args: Record<string, unknown>;
-      result?: Array<{ functionResponse: { name: string; response: { output: string } } }>;
-    }> | undefined;
+    const toolCalls = msg.toolCalls as
+      | Array<{
+          name: string;
+          args: Record<string, unknown>;
+          result?: Array<{ functionResponse: { name: string; response: { output: string } } }>;
+        }>
+      | undefined;
 
     if (type === 'user' && rawContent) {
       // content can be string or parts array [{text: "..."}]
@@ -502,7 +504,9 @@ export class GeminiAgent {
       try {
         // Extract Content[] from session file messages (they contain full toolCall name/args/functionResponse)
         const history = extractContentFromSessionFile(this.resumedSessionData.conversation);
-        console.log(`[GeminiAgent] Resuming with ${history.length} Content entries from: ${this.resumedSessionData.filePath}`);
+        console.log(
+          `[GeminiAgent] Resuming with ${history.length} Content entries from: ${this.resumedSessionData.filePath}`
+        );
         await this.geminiClient.resumeChat(history, this.resumedSessionData as any);
         console.log('[GeminiAgent] Native session resume successful');
       } catch (e) {

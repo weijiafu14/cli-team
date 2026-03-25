@@ -28,31 +28,31 @@ Each line in `messages.jsonl` is a JSON object:
 
 ## Message Types
 
-| Type | When to Use |
-|------|-------------|
-| `claim` | Declare intent to work on a specific task (mutually exclusive) |
-| `intent` | Declare planned work (informational, not exclusive) |
-| `update` | Progress update during work |
-| `question` | Ask another member for information |
-| `challenge` | Disagree with a proposal — must provide evidence |
-| `finding` | Share a discovery or investigation result |
-| `design` | Publish a design document (attach as file if long) |
-| `decision` | Propose a final conclusion |
-| `conclusion` | Summarize agreed outcome |
-| `ack` | Explicitly acknowledge a decision (required for consensus, must include `reply_to`) |
-| `done` | Mark work as complete (must follow a design document) |
-| `system` | Protocol-level notices |
-| `direction` | User-provided guidance |
+| Type         | When to Use                                                                         |
+| ------------ | ----------------------------------------------------------------------------------- |
+| `claim`      | Declare intent to work on a specific task (mutually exclusive)                      |
+| `intent`     | Declare planned work (informational, not exclusive)                                 |
+| `update`     | Progress update during work                                                         |
+| `question`   | Ask another member for information                                                  |
+| `challenge`  | Disagree with a proposal — must provide evidence                                    |
+| `finding`    | Share a discovery or investigation result                                           |
+| `design`     | Publish a design document (attach as file if long)                                  |
+| `decision`   | Propose a final conclusion                                                          |
+| `conclusion` | Summarize agreed outcome                                                            |
+| `ack`        | Explicitly acknowledge a decision (required for consensus, must include `reply_to`) |
+| `done`       | Mark work as complete (must follow a design document)                               |
+| `system`     | Protocol-level notices                                                              |
+| `direction`  | User-provided guidance                                                              |
 
 ## Dispatch Routing
 
 The `dispatch` field controls which agents get woken up:
 
-| Value | Behavior |
-|-------|----------|
-| `all` | Wake all members except sender. Use `to: ["*"]`. Default for user messages. |
-| `targets` | Wake only members listed in `to`. Use `to: ["<memberId>", ...]`. |
-| `none` | Append to timeline only, no wakeup. Use `to: ["user"]`. |
+| Value     | Behavior                                                                    |
+| --------- | --------------------------------------------------------------------------- |
+| `all`     | Wake all members except sender. Use `to: ["*"]`. Default for user messages. |
+| `targets` | Wake only members listed in `to`. Use `to: ["<memberId>", ...]`.            |
+| `none`    | Append to timeline only, no wakeup. Use `to: ["user"]`.                     |
 
 User messages always wake all agents regardless of `dispatch`.
 
@@ -86,6 +86,7 @@ Lock files stored in `<coordDir>/locks/<key>.json`. If blocked, agent should coo
 ## Attachment Rule
 
 Content longer than 400 characters must be stored as attachment:
+
 - `coord_write.py --body-file <path>` handles this automatically
 - File saved to `<coordDir>/attachments/<msg-id>.md`
 - Only short preview kept inline
@@ -93,6 +94,7 @@ Content longer than 400 characters must be stored as attachment:
 ## Design Document Rule
 
 Before marking `done`, agent must publish a design document containing:
+
 1. Problem statement
 2. Chosen approach
 3. Alternatives considered
@@ -105,17 +107,20 @@ Before marking `done`, agent must publish a design document containing:
 Both scripts are embedded in each team's coord directory (no external dependency):
 
 ### coord_read.py
+
 ```bash
 python3 <coordDir>/scripts/coord_read.py \
   --messages <coordDir>/messages.jsonl \
   --state-dir <coordDir>/state \
   --agent-id <memberId>
 ```
+
 - Reads only new messages since last cursor position
 - `--peek` to inspect without advancing cursor
 - `--json` for structured output
 
 ### coord_write.py
+
 ```bash
 python3 <coordDir>/scripts/coord_write.py \
   --messages <coordDir>/messages.jsonl \
@@ -127,6 +132,7 @@ python3 <coordDir>/scripts/coord_write.py \
   --dispatch <all|targets|none> \
   --reply-to <msg-id>
 ```
+
 - Auto-generates message ID and timestamp
 - Long body auto-split into attachment
 - `--lock-key` + `--lock-action` for mutual exclusion

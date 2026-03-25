@@ -101,7 +101,7 @@ export function evaluateConsensusProgress(
   const latestConsensus = timeline
     .map((entry, index) => ({ entry, index }))
     .slice()
-    .reverse()
+    .toReversed()
     .find(({ entry }) => {
       return entry.type === 'consensus';
     });
@@ -137,8 +137,8 @@ export function evaluateConsensusProgress(
         .filter((entry) => entry.type === 'ack' && entry.reply_to === candidate.entry.id)
         .map((entry) => entry.from)
     );
-    const allAcked = members.every(
-      (member) => [member.memberId, member.name, member.conversationId].some((identity) => candidateAckFroms.has(identity))
+    const allAcked = members.every((member) =>
+      [member.memberId, member.name, member.conversationId].some((identity) => candidateAckFroms.has(identity))
     );
     if (allAcked) {
       return { status: 'reached', finalDecisionId: candidate.entry.id };
@@ -399,7 +399,7 @@ export class CoordDispatcher {
     const signature = `${progress.finalDecisionId}:${missingMembers
       .map((memberState) => memberState.member.memberId)
       .slice()
-      .sort()
+      .toSorted()
       .join(',')}`;
     if (state.lastConsensusSignature === signature) {
       return;

@@ -298,7 +298,7 @@ export const useMessageLstCache = (key: string) => {
         if (cancelled || !messages || !Array.isArray(messages)) {
           return;
         }
-        const normalizedMessages = [...messages].reverse();
+        const normalizedMessages = [...messages].toReversed();
         // Merge DB messages with any real-time streaming messages already in the list.
         // This prevents a race condition where streaming messages (added via IPC before
         // the DB load completes) could cause DB-only messages to be lost.

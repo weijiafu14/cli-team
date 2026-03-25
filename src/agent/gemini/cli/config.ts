@@ -105,11 +105,7 @@ export async function loadCliConfig({
   // aioncli-core 需要 'auto-gemini-3' 或 'auto-gemini-2.5'，而不是纯 'auto' 或历史遗留的 'default'
   // Config 内部会调用 resolveModel(model, getGemini31LaunchedSync()) 解析为 gemini-3.1-pro-preview
   const resolvedModel =
-    model === 'auto'
-      ? PREVIEW_GEMINI_MODEL_AUTO
-      : model === 'default'
-        ? PREVIEW_GEMINI_MODEL_AUTO
-        : model;
+    model === 'auto' ? PREVIEW_GEMINI_MODEL_AUTO : model === 'default' ? PREVIEW_GEMINI_MODEL_AUTO : model;
 
   const debugMode =
     argv.debug || [process.env.DEBUG, process.env.DEBUG_MODE].some((v) => v === 'true' || v === '1') || false;

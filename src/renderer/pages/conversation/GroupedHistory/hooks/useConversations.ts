@@ -134,15 +134,17 @@ export const useConversations = () => {
   const visibleTimelineSections = useMemo(() => {
     if (hiddenWorkspaces.length === 0) return timelineSections;
     const hiddenSet = new Set(hiddenWorkspaces);
-    return timelineSections.map((section) => ({
-      ...section,
-      items: section.items.filter((item) => {
-        if (item.type === 'workspace' && item.workspaceGroup) {
-          return !hiddenSet.has(item.workspaceGroup.workspace);
-        }
-        return true;
-      }),
-    })).filter((section) => section.items.length > 0);
+    return timelineSections
+      .map((section) => ({
+        ...section,
+        items: section.items.filter((item) => {
+          if (item.type === 'workspace' && item.workspaceGroup) {
+            return !hiddenSet.has(item.workspaceGroup.workspace);
+          }
+          return true;
+        }),
+      }))
+      .filter((section) => section.items.length > 0);
   }, [timelineSections, hiddenWorkspaces]);
 
   const handleToggleWorkspace = useCallback((workspace: string) => {
@@ -155,7 +157,7 @@ export const useConversations = () => {
   }, []);
 
   const handleHideWorkspace = useCallback((workspace: string) => {
-    setHiddenWorkspaces((prev) => prev.includes(workspace) ? prev : [...prev, workspace]);
+    setHiddenWorkspaces((prev) => (prev.includes(workspace) ? prev : [...prev, workspace]));
   }, []);
 
   const handleUnhideWorkspace = useCallback((workspace: string) => {

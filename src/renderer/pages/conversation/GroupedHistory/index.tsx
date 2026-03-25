@@ -371,11 +371,7 @@ const WorkspaceGroupedHistory: React.FC<WorkspaceGroupedHistoryProps> = ({
 
                     return (
                       <div key={conversation.id}>
-                        {isDragEnabled ? (
-                          <SortableConversationRow {...props} />
-                        ) : (
-                          <ConversationRow {...props} />
-                        )}
+                        {isDragEnabled ? <SortableConversationRow {...props} /> : <ConversationRow {...props} />}
                         {teamChildren.length > 0 && (
                           <div className='ml-16px flex flex-col gap-2px'>
                             {teamChildren.map((child) => renderConversation(child))}
@@ -480,7 +476,9 @@ const WorkspaceGroupedHistory: React.FC<WorkspaceGroupedHistoryProps> = ({
               onClick={handleUnhideAll}
             >
               <Eyes size={14} />
-              <span>{hiddenWorkspaces.length} hidden workspace{hiddenWorkspaces.length > 1 ? 's' : ''}</span>
+              <span>
+                {hiddenWorkspaces.length} hidden workspace{hiddenWorkspaces.length > 1 ? 's' : ''}
+              </span>
             </button>
           </div>
         )}

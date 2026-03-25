@@ -323,7 +323,10 @@ async function prepareCodex(): Promise<NpxPrepareResult> {
   return { cleanEnv, npxCommand: resolveNpxPath(cleanEnv) };
 }
 
-async function prepareCodexBinaryOverride(): Promise<{ cleanEnv: Record<string, string | undefined>; cliPath: string }> {
+async function prepareCodexBinaryOverride(): Promise<{
+  cleanEnv: Record<string, string | undefined>;
+  cliPath: string;
+}> {
   const cleanEnv = prepareCleanEnv();
   ensureMinNodeVersion(cleanEnv, 20, 10, 'Codex ACP bridge');
 
@@ -467,7 +470,7 @@ export function connectClaude(workingDir: string, hooks: NpxConnectHooks): Promi
 export async function connectCodex(workingDir: string, hooks: NpxConnectHooks): Promise<void> {
   // Prefer v0.10.0+ binary for stable session/load (cross-process resume).
   // v0.7.4 npm package only supports in-process session/load.
-  const override = process.env[CODEX_ACP_BINARY_ENV]?.trim() || await findLocalCodexAcpBinary();
+  const override = process.env[CODEX_ACP_BINARY_ENV]?.trim() || (await findLocalCodexAcpBinary());
   if (override) {
     process.env[CODEX_ACP_BINARY_ENV] = override;
     try {

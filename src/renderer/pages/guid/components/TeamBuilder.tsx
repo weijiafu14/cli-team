@@ -212,7 +212,7 @@ const TeamBuilder: React.FC<TeamBuilderProps> = ({ availableAgents, onTeamCreate
                   {selectedCount} selected
                 </div>
               </div>
-              
+
               <div className='text-12px text-t-secondary mb-16px'>
                 Select at least two specialists to join the room.
               </div>
