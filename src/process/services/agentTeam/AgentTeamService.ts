@@ -336,6 +336,31 @@ export class AgentTeamService {
     const isConsensus = input.input.trim().startsWith('/consensus');
     const msgId = input.msgId || uuid();
 
+    // Interrupt: kill target agents so the next dispatch rebuilds them with a fresh process
+    // that resumes the same ACP session. This breaks stuck/frozen agent states.
+    if (input.interrupt) {
+      const dispatcher = this.dispatchers.get(input.conversationId);
+      if (dispatcher) {
+        dispatcher.interruptMembers(input.targets);
+      } else {
+        const targetConversationIds =
+          input.targets && input.targets.length > 0
+            ? team.members
+                .filter(
+                  (member) =>
+                    input.targets?.includes(member.memberId) ||
+                    input.targets?.includes(member.conversationId) ||
+                    input.targets?.includes(member.name)
+                )
+                .map((member) => member.conversationId)
+            : team.members.map((member) => member.conversationId);
+
+        for (const targetConversationId of targetConversationIds) {
+          this.workerTaskManager.kill(targetConversationId);
+        }
+      }
+    }
+
     // Copy files to coord attachments
     let attachedFiles: string[] | undefined;
     if (input.files && input.files.length > 0) {
@@ -791,6 +816,18 @@ The completion message should either:
 
 1. use \`type=design\` and attach the design document, or
 2. reference an earlier \`design\` message before sending \`done\`
+
+## Knowledge Sedimentation
+
+The workspace \`docs/tech/agent-team/\` is the team's canonical memory. It MUST be organized as a **hierarchical tree structure** with nested sub-directories (e.g., \`pitfalls/frontend/react/\`) to facilitate efficient agent navigation and retrieval. It contains:
+- \`decisions/\`: Architectural choices and rationale.
+- \`pitfalls/\`: Discovered traps, anti-patterns, and bug postmortems.
+- \`workflows/\`: Standard operating procedures.
+- \`glossary/\`: Domain terminology.
+
+Rules:
+1. **Consult before implementation:** If a task relates to an established area, you MUST consult the relevant documents in the \`docs/tech/agent-team/\` tree before writing code or proposing a design.
+2. **Land before done:** If your task resolves a complex bug, establishes a new pattern, or makes an architectural decision, you MUST land durable decisions/pitfalls/workflows back into the \`docs/tech/agent-team/\` tree before declaring the task \`done\`. Create necessary sub-directories to maintain the tree structure and keep files small and focused.
 
 ## Collaboration Rule
 
