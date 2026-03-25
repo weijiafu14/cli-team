@@ -93,6 +93,28 @@ You are part of an Agent Team. Follow these rules strictly.
 - Direct message (wake specific member only): add \`--dispatch targets --to <memberId>\`
 - No-wakeup message (timeline only): add \`--dispatch none --to user\`
 - Peek (without advancing cursor): add \`--peek\`
+
+## Knowledge Sedimentation (Doc-First)
+
+Knowledge must be written to \`docs/tech/agent-team/\` in the workspace so it persists across context resets and is shared via git.
+
+### Before Starting Work
+- Browse \`docs/tech/agent-team/\` to check for existing knowledge relevant to your task.
+- Pay special attention to \`pitfalls/\` for known issues and \`decisions/\` for past architectural choices.
+
+### After Completing Work
+Write knowledge when you:
+- Fixed a non-obvious bug → \`docs/tech/agent-team/pitfalls/<descriptive-name>.md\`
+- Made an architectural decision → \`docs/tech/agent-team/decisions/<descriptive-name>.md\`
+- Established a workflow or best practice → \`docs/tech/agent-team/workflows/<descriptive-name>.md\`
+- Defined a term or concept → \`docs/tech/agent-team/glossary/<descriptive-name>.md\`
+
+### Writing Guidelines
+- **Tree structure**: Directory names must clearly describe contents so agents can find knowledge by browsing paths alone.
+- **Small files**: Each file must stay under 200 lines to avoid consuming too much context when read.
+- **Descriptive filenames**: Use English kebab-case (e.g. \`gemini-shell-timeout-fix.md\`).
+- **Summary first**: Start every file with a one-line summary of what it covers.
+- **Self-evolving**: The process of writing knowledge is itself knowledge — see \`workflows/knowledge-maintenance.md\`.
 `;
 }
 
@@ -837,8 +859,8 @@ The workspace \`docs/tech/agent-team/\` is the team's canonical memory. It MUST 
 
 Rules:
 1. **Consult before implementation:** If a task relates to an established area, you MUST consult the relevant documents in the \`docs/tech/agent-team/\` tree before writing code or proposing a design.
-2. **Land before done:** If your task resolves a complex bug, establishes a new pattern, or makes an architectural decision, you MUST land durable decisions/pitfalls/workflows back into the \`docs/tech/agent-team/\` tree before declaring the task \`done\`. Create necessary sub-directories to maintain the tree structure and keep files small and focused to avoid context window exhaustion.
-3. **Evolve the framework:** The team must maintain guidelines in \`docs/tech/agent-team/workflows/docs-governance/\` on how to effectively document experience for this specific project.
+2. **Land before done:** If your task resolves a complex bug, establishes a new pattern, or makes an architectural decision, you MUST land durable decisions/pitfalls/workflows back into the \`docs/tech/agent-team/\` tree before declaring the task \`done\`. Keep files small and focused to avoid context window exhaustion. **Teams are completely free to flexibly arrange, nest, and define the folder structure BENEATH the four top-level directories according to their specific project needs.**
+3. **Evolve the framework:** The team must maintain guidelines in \`docs/tech/agent-team/workflows/knowledge-maintenance.md\` on how to effectively document experience for this specific project.
 
 ## Collaboration Rule
 
@@ -880,6 +902,25 @@ If the user's direction explicitly says “达成共识”, “共识后再来�
 1. an \`update\` or \`decision\` marking the task as \`consensus.required=true\`,
 2. the planned investigation branches,
 3. and later a chain of explicit \`ack\` messages that close the task.
+
+## Knowledge Sedimentation Rule
+
+Agents must persist valuable experience to \`docs/tech/agent-team/\` in the workspace. This knowledge survives context compression and is shared across teams via git.
+
+Required directories (first level is fixed, subdirectories evolve with the team):
+
+- \`decisions/\` — architectural choices and their rationale
+- \`pitfalls/\` — bugs, gotchas, and how they were fixed
+- \`workflows/\` — processes, best practices, and how to maintain knowledge itself
+- \`glossary/\` — terms, concepts, and system-specific definitions
+
+Rules:
+
+1. Before starting work, browse the knowledge tree for relevant prior experience.
+2. After completing work that produced non-obvious insights, write them to the appropriate directory.
+3. Keep files under 200 lines. Use descriptive English filenames. Start with a one-line summary.
+4. Directory structure must be self-explanatory — an agent should understand what knowledge exists just by listing paths.
+5. The system only defines this framework; each team evolves its own sedimentation practice over time.
 `;
 
 const EMBEDDED_COORD_READ_PY = `#!/usr/bin/env python3
