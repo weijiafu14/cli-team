@@ -688,9 +688,9 @@ Agents must not ignore user guidance, and must not flatter the user instead of d
 The \`dispatch\` field controls which agents are woken up when a message is appended:
 
 - User messages always wake all agents regardless of \`dispatch\`.
-- \`dispatch=all\`: wake every member except the sender. Use \`to: ["*"]\`. **Only use this for messages that genuinely require all agents to respond** (e.g. new task assignments, consensus proposals, challenges).
+- \`dispatch=all\`: wake every member except the sender. Use \`to: ["*"]\`.
 - \`dispatch=targets\`: wake only the members listed in \`to\`. Use \`to: ["<memberId>", ...]\`.
-- \`dispatch=none\`: do not wake any agent. Use \`to: ["user"]\`. The message is visible in the timeline but no agent is interrupted. **This is the default.**
+- \`dispatch=none\`: do not wake any agent. Use \`to: ["*"]\`. The message is visible in the timeline but no agent is interrupted. **This is the default to prevent wakeup storms.**
 
 Use \`--dispatch\` flag with \`coord_write.py\` to set this field.
 
@@ -1024,12 +1024,16 @@ def main() -> int:
 
     lock_info = manage_lock(Path(args.locks_dir), args.agent_id, args.lock_key, args.lock_action, args.summary, args.force_lock) if args.lock_key else {}
 
+    to_list = [item.strip() for item in args.to.split(",") if item.strip()] or ["*"]
+    if args.dispatch == "none" and to_list == ["*"]:
+        to_list = ["user"]
+
     msg = {
         "id": msg_id,
         "ts": now_iso(),
         "from": args.agent_id,
         "role": args.role,
-        "to": [item.strip() for item in args.to.split(",") if item.strip()] or ["*"],
+        "to": to_list,
         "topic": args.topic,
         "task_id": args.task_id,
         "type": args.type,
