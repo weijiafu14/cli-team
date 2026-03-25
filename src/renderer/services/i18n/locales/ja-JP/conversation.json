@@ -207,5 +207,10 @@
     "request_sent": "Request sent to agent",
     "failed": "Failed to generate",
     "preset_registered": "Agent preset registered successfully!"
+  },
+  "agentTeam": {
+    "interruptNextSend": "次の送信を割り込み",
+    "interruptTitle": "次の送信で割り込みモードを有効化",
+    "interruptActiveTitle": "割り込みモードが有効です。次のメッセージは @ したメンバーを中断し、@ がなければ全員を中断します"
   }
 }

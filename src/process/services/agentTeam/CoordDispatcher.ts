@@ -230,6 +230,42 @@ export class CoordDispatcher {
     this.stopBusyPolling();
   }
 
+  /**
+   * Interrupt specific members (or all if no targets given).
+   * Kills their running tasks and resets busy state so the next dispatched
+   * message will spawn a fresh agent process that resumes the same ACP session.
+   */
+  async interruptMembers(targetMemberIds?: string[]): Promise<void> {
+    const pendingStops: Promise<void>[] = [];
+    for (const state of this.memberStates.values()) {
+      const shouldInterrupt =
+        !targetMemberIds ||
+        targetMemberIds.length === 0 ||
+        targetMemberIds.includes(state.member.memberId) ||
+        targetMemberIds.includes(state.member.conversationId);
+
+      if (shouldInterrupt) {
+        state.pendingMessages = [];
+        state.busy = false;
+        pendingStops.push(this.stopAndKillTask(state.member.conversationId));
+      }
+    }
+    await Promise.all(pendingStops);
+    this.syncBusyPolling();
+  }
+
+  private async stopAndKillTask(conversationId: string): Promise<void> {
+    const task = this.workerTaskManager.getTask(conversationId);
+    if (task) {
+      try {
+        await task.stop();
+      } catch (err) {
+        console.warn(`[CoordDispatcher] Failed to stop task before interrupt for ${conversationId}:`, err);
+      }
+    }
+    this.workerTaskManager.kill(conversationId);
+  }
+
   private handleNewMessages(messages: ICoordTimelineEntry[]): void {
     for (const msg of messages) {
       // Determine target members
@@ -298,6 +334,21 @@ export class CoordDispatcher {
     state.busy = true;
     this.ensureBusyPolling();
 
+    // Check if this member's session is poisoned and needs a fresh start
+    try {
+      const { getAutoCompactionOrchestrator } =
+        require('@process/services/autoCompaction') as typeof import('@process/services/autoCompaction');
+      const orchestrator = getAutoCompactionOrchestrator();
+      if (orchestrator.isSessionPoisoned(state.member.conversationId)) {
+        console.log(`[CoordDispatcher] Session poisoned for ${state.member.name}, resetting before dispatch`);
+        // Interrupt the member to force a fresh session on next getOrBuildTask
+        await this.interruptMembers([state.member.memberId]);
+        orchestrator.clearPoisonedState(state.member.conversationId);
+      }
+    } catch {
+      // autoCompaction module not loaded yet — skip check
+    }
+
     const coordText = msg.from === 'coord-dispatcher' && msg.body ? msg.body : this.buildWakeupMessage(state, [msg]);
 
     try {
@@ -310,6 +361,17 @@ export class CoordDispatcher {
       });
     } catch (err) {
       console.error(`[CoordDispatcher] Failed to dispatch to ${state.member.name}:`, err);
+
+      // Track consecutive errors for session health monitoring
+      try {
+        const { getAutoCompactionOrchestrator } =
+          require('@process/services/autoCompaction') as typeof import('@process/services/autoCompaction');
+        const errorMsg = err instanceof Error ? err.message : String(err);
+        getAutoCompactionOrchestrator().reportError(state.member.conversationId, errorMsg);
+      } catch {
+        // autoCompaction module not loaded yet — skip
+      }
+
       state.busy = false;
       this.syncBusyPolling();
     }

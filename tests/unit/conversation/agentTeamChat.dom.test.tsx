@@ -6,7 +6,7 @@
 
 import React from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { cleanup, render, screen, waitFor } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import type { ICoordTimelineEntry } from '@/common/ipcBridge';
 
 const mockRefs = vi.hoisted(() => ({
@@ -17,6 +17,8 @@ const mockRefs = vi.hoisted(() => ({
   getConversationMock: vi.fn(),
   readFileMock: vi.fn(),
   getImageBase64Mock: vi.fn(),
+  sendMessageMock: vi.fn(),
+  abortMock: vi.fn(),
 }));
 
 function MockArcoImage({ src, alt, className }: { src: string; alt: string; className?: string }) {
@@ -29,8 +31,8 @@ vi.mock('@/common/ipcBridge', () => ({
   agentTeam: {
     getTimeline: { invoke: mockRefs.getTimelineMock },
     timelineStream: { on: mockRefs.timelineStreamOnMock },
-    abort: { invoke: vi.fn() },
-    sendMessage: { invoke: vi.fn() },
+    abort: { invoke: mockRefs.abortMock },
+    sendMessage: { invoke: mockRefs.sendMessageMock },
     getMembers: { invoke: vi.fn() },
   },
   conversation: {
@@ -42,12 +44,36 @@ vi.mock('@/common/ipcBridge', () => ({
   },
 }));
 
+vi.mock('react-i18next', () => ({
+  useTranslation: () => ({
+    t: (_key: string, options?: { defaultValue?: string }) => options?.defaultValue || _key,
+  }),
+}));
+
 vi.mock('@/renderer/hooks/context/ConversationContext', () => ({
   ConversationProvider: ({ children }: { children: React.ReactNode }) => <>{children}</>,
 }));
 
 vi.mock('@/renderer/components/chat/sendbox', () => ({
-  default: ({ tools }: { tools?: React.ReactNode }) => <div data-testid='sendbox'>{tools}</div>,
+  default: ({
+    value,
+    onChange,
+    onSend,
+    tools,
+  }: {
+    value?: string;
+    onChange?: (value: string) => void;
+    onSend: (message: string) => Promise<void>;
+    tools?: React.ReactNode;
+  }) => (
+    <div data-testid='sendbox'>
+      <input data-testid='sendbox-input' value={value || ''} onChange={(event) => onChange?.(event.target.value)} />
+      <button type='button' onClick={() => void onSend(value || '')}>
+        send
+      </button>
+      {tools}
+    </div>
+  ),
 }));
 
 vi.mock('@/renderer/components/media/FileAttachButton', () => ({
@@ -80,6 +106,7 @@ vi.mock('react-router-dom', () => ({
 
 vi.mock('@icon-park/react', () => ({
   PauseOne: () => <span>pause</span>,
+  Lightning: () => <span>lightning</span>,
 }));
 
 vi.mock('@arco-design/web-react', () => {
@@ -104,6 +131,8 @@ describe('AgentTeamChat recovery', () => {
   beforeEach(() => {
     mockRefs.scrollToMock.mockReset();
     mockRefs.navigateMock.mockReset();
+    mockRefs.sendMessageMock.mockReset();
+    mockRefs.abortMock.mockReset();
     mockRefs.getTimelineMock.mockResolvedValue({
       success: true,
       data: {
@@ -119,15 +148,21 @@ describe('AgentTeamChat recovery', () => {
           {
             memberId: 'agent-1',
             conversationId: 'conversation-1',
-            name: 'Gemini CLI',
-            type: 'gemini',
-            backend: 'gemini',
+            name: 'Claude Code',
+            type: 'acp',
+            backend: 'claude',
           },
         ],
       },
     });
     mockRefs.readFileMock.mockResolvedValue('# attached markdown');
     mockRefs.getImageBase64Mock.mockResolvedValue('data:image/png;base64,abc');
+    mockRefs.sendMessageMock.mockResolvedValue({
+      success: true,
+      data: {
+        entry: createEntry(),
+      },
+    });
     Element.prototype.scrollTo = mockRefs.scrollToMock;
   });
 
@@ -217,8 +252,84 @@ describe('AgentTeamChat recovery', () => {
     render(<AgentTeamChat conversation_id='team-1' />);
 
     await waitFor(() => {
-      // MarkdownView should receive the unescaped string
-      expect(screen.getByText('line1\nline2')).toBeInTheDocument();
+      expect(
+        screen.getAllByText((_content, node) => {
+          return node?.textContent === 'line1\nline2';
+        }).length
+      ).toBeGreaterThan(0);
+    });
+  });
+
+  it('sends interrupt=true with mentioned targets when interrupt mode is enabled, then auto-resets on success', async () => {
+    render(<AgentTeamChat conversation_id='team-1' />);
+
+    const input = await screen.findByTestId('sendbox-input');
+    fireEvent.change(input, { target: { value: '@Claude Code 紧急处理' } });
+    fireEvent.click(screen.getByText('lightning').closest('button')!);
+    fireEvent.click(screen.getByText('send'));
+
+    await waitFor(() => {
+      expect(mockRefs.sendMessageMock).toHaveBeenCalledWith(
+        expect.objectContaining({
+          conversation_id: 'team-1',
+          input: '@Claude Code 紧急处理',
+          targets: ['agent-1'],
+          interrupt: true,
+        })
+      );
+    });
+
+    fireEvent.change(input, { target: { value: '后续普通消息' } });
+    fireEvent.click(screen.getByText('send'));
+
+    await waitFor(() => {
+      expect(mockRefs.sendMessageMock).toHaveBeenNthCalledWith(
+        2,
+        expect.objectContaining({
+          conversation_id: 'team-1',
+          input: '后续普通消息',
+          targets: undefined,
+          interrupt: undefined,
+        })
+      );
+    });
+  });
+
+  it('resets interrupt mode even when send fails, avoiding accidental repeated interrupts', async () => {
+    mockRefs.sendMessageMock.mockRejectedValueOnce(new Error('boom'));
+    mockRefs.sendMessageMock.mockResolvedValueOnce({
+      success: true,
+      data: {
+        entry: createEntry(),
+      },
+    });
+
+    render(<AgentTeamChat conversation_id='team-1' />);
+
+    fireEvent.click(screen.getByText('lightning').closest('button')!);
+    fireEvent.change(screen.getByTestId('sendbox-input'), { target: { value: '救火消息' } });
+    fireEvent.click(screen.getByText('send'));
+
+    await waitFor(() => {
+      expect(mockRefs.sendMessageMock).toHaveBeenNthCalledWith(
+        1,
+        expect.objectContaining({
+          input: '救火消息',
+          interrupt: true,
+        })
+      );
+    });
+
+    fireEvent.click(screen.getByText('send'));
+
+    await waitFor(() => {
+      expect(mockRefs.sendMessageMock).toHaveBeenNthCalledWith(
+        2,
+        expect.objectContaining({
+          input: '救火消息',
+          interrupt: undefined,
+        })
+      );
     });
   });
 });

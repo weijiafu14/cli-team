@@ -341,6 +341,35 @@
   margin-bottom: 8px;
 }
 
+.interruptButton {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border: none;
+  border-radius: 4px;
+  background: var(--color-fill-2);
+  color: var(--color-text-3);
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.interruptButton:hover {
+  color: var(--color-warning-6);
+  background: color-mix(in srgb, var(--color-warning-6) 15%, var(--color-fill-2));
+}
+
+.interruptActive {
+  color: var(--color-warning-6);
+  background: color-mix(in srgb, var(--color-warning-6) 20%, var(--color-fill-2));
+}
+
+.interruptButton:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
 .abortButton {
   display: inline-flex;
   align-items: center;

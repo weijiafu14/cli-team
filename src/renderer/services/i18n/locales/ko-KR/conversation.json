@@ -207,5 +207,10 @@
     "request_sent": "에이전트에게 요청이 전송되었습니다",
     "failed": "생성 실패",
     "preset_registered": "에이전트 프리셋이 성공적으로 등록되었습니다!"
+  },
+  "agentTeam": {
+    "interruptNextSend": "다음 전송 인터럽트",
+    "interruptTitle": "다음 전송에 인터럽트 모드 사용",
+    "interruptActiveTitle": "인터럽트 모드가 켜져 있습니다. 다음 메시지는 @한 멤버를 중단하고, @가 없으면 모두를 중단합니다"
   }
 }

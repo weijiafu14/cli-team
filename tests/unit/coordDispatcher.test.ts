@@ -1,10 +1,22 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import {
   buildCoordWakeupMessage,
+  CoordDispatcher,
   evaluateConsensusProgress,
 } from '../../src/process/services/agentTeam/CoordDispatcher';
 import type { IAgentTeamMember } from '@/common/storage';
 import type { ICoordTimelineEntry } from '../../src/process/services/agentTeam/types';
+import type { IWorkerTaskManager } from '../../src/process/task/IWorkerTaskManager';
+
+type DispatcherMemberState = {
+  member: IAgentTeamMember;
+  busy: boolean;
+  pendingMessages: ICoordTimelineEntry[];
+};
+
+type DispatcherWithInternals = CoordDispatcher & {
+  memberStates: Map<string, DispatcherMemberState>;
+};
 
 const createEntry = (overrides?: Partial<ICoordTimelineEntry>): ICoordTimelineEntry => ({
   id: 'msg-1',
@@ -347,5 +359,125 @@ describe('evaluateConsensusProgress', () => {
     );
 
     expect(progress).toEqual({ status: 'inactive' });
+  });
+});
+
+describe('CoordDispatcher interruptMembers', () => {
+  it('kills and clears only the targeted member state', async () => {
+    const members = [
+      createMember(),
+      createMember({
+        conversationId: 'conv-claude',
+        memberId: 'member-claude',
+        name: 'Claude',
+      }),
+    ];
+    const workerTaskManager = {
+      getTask: vi.fn((id: string) =>
+        id === 'conv-codex'
+          ? ({
+              stop: vi.fn().mockResolvedValue(undefined),
+            } as unknown)
+          : ({
+              stop: vi.fn().mockResolvedValue(undefined),
+            } as unknown)
+      ),
+      kill: vi.fn(),
+    } as unknown as IWorkerTaskManager;
+    const dispatcher = new CoordDispatcher(
+      '/tmp/coord',
+      members,
+      workerTaskManager,
+      'user-priority'
+    ) as DispatcherWithInternals;
+
+    const codexState = dispatcher.memberStates.get('conv-codex');
+    const claudeState = dispatcher.memberStates.get('conv-claude');
+    expect(codexState).toBeDefined();
+    expect(claudeState).toBeDefined();
+    if (!codexState || !claudeState) {
+      throw new Error('Expected dispatcher member states to exist');
+    }
+    codexState.busy = true;
+    codexState.pendingMessages = [createEntry({ id: 'pending-codex' })];
+    claudeState.busy = true;
+    claudeState.pendingMessages = [createEntry({ id: 'pending-claude' })];
+
+    await dispatcher.interruptMembers(['member-codex']);
+
+    expect(workerTaskManager.kill).toHaveBeenCalledTimes(1);
+    expect(workerTaskManager.kill).toHaveBeenCalledWith('conv-codex');
+    expect(codexState.busy).toBe(false);
+    expect(codexState.pendingMessages).toEqual([]);
+    expect(claudeState.busy).toBe(true);
+    expect(claudeState.pendingMessages).toHaveLength(1);
+  });
+
+  it('kills and clears all member states when no targets are provided', async () => {
+    const members = [
+      createMember(),
+      createMember({
+        conversationId: 'conv-claude',
+        memberId: 'member-claude',
+        name: 'Claude',
+      }),
+    ];
+    const workerTaskManager = {
+      getTask: vi.fn(() => ({
+        stop: vi.fn().mockResolvedValue(undefined),
+      })),
+      kill: vi.fn(),
+    } as unknown as IWorkerTaskManager;
+    const dispatcher = new CoordDispatcher(
+      '/tmp/coord',
+      members,
+      workerTaskManager,
+      'user-priority'
+    ) as DispatcherWithInternals;
+
+    for (const state of dispatcher.memberStates.values()) {
+      state.busy = true;
+      state.pendingMessages = [createEntry({ id: `pending-${state.member.memberId}` })];
+    }
+
+    await dispatcher.interruptMembers();
+
+    expect(workerTaskManager.kill).toHaveBeenCalledTimes(2);
+    expect(workerTaskManager.kill).toHaveBeenCalledWith('conv-codex');
+    expect(workerTaskManager.kill).toHaveBeenCalledWith('conv-claude');
+    for (const state of dispatcher.memberStates.values()) {
+      expect(state.busy).toBe(false);
+      expect(state.pendingMessages).toEqual([]);
+    }
+  });
+
+  it('waits for stop to finish before killing the targeted task', async () => {
+    let resolveStop: (() => void) | undefined;
+    const stop = vi.fn(
+      () =>
+        new Promise<void>((resolve) => {
+          resolveStop = resolve;
+        })
+    );
+    const workerTaskManager = {
+      getTask: vi.fn(() => ({ stop })),
+      kill: vi.fn(),
+    } as unknown as IWorkerTaskManager;
+    const dispatcher = new CoordDispatcher(
+      '/tmp/coord',
+      [createMember()],
+      workerTaskManager,
+      'user-priority'
+    );
+
+    const interruptPromise = dispatcher.interruptMembers(['member-codex']);
+
+    expect(stop).toHaveBeenCalledTimes(1);
+    expect(workerTaskManager.kill).not.toHaveBeenCalled();
+
+    resolveStop?.();
+    await interruptPromise;
+
+    expect(workerTaskManager.kill).toHaveBeenCalledWith('conv-codex');
   });
 });

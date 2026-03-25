@@ -69,6 +69,8 @@ export interface IAgentTeamSendMessageInput {
   msgId?: string;
   files?: string[];
   targets?: string[];
+  /** When true, kill target agents before dispatching — breaks stuck/frozen states. */
+  interrupt?: boolean;
 }
 
 export interface IResolvedAgentTeam {
