@@ -192,4 +192,30 @@ describe('AgentTeamChat recovery', () => {
       expect(screen.getByText('Show more')).toBeInTheDocument();
     }, { timeout: 1000 });
   });
+
+  it('unescapes literal newlines in body before passing to MarkdownView', async () => {
+    mockRefs.getTimelineMock.mockResolvedValueOnce({
+      success: true,
+      data: {
+        entries: [
+          {
+            id: 'msg-newline',
+            ts: '2026-03-24T12:00:00Z',
+            from: 'agent-1',
+            role: 'agent',
+            type: 'update',
+            summary: 'newline test',
+            body: 'line1\\nline2', // literal backslash-n
+          },
+        ],
+      }
+    });
+
+    render(<AgentTeamChat conversation_id='team-1' />);
+
+    await waitFor(() => {
+      // MarkdownView should receive the unescaped string
+      expect(screen.getByText('line1\nline2')).toBeInTheDocument();
+    });
+  });
 });
