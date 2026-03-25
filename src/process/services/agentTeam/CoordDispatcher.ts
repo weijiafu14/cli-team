@@ -25,6 +25,12 @@ type WakeupMessageParams = {
   messages: ICoordTimelineEntry[];
 };
 
+type ConsensusProgress =
+  | { status: 'inactive' }
+  | { status: 'waiting-decision' }
+  | { status: 'awaiting-acks'; finalDecisionId: string; missingConversationIds: string[] }
+  | { status: 'reached'; finalDecisionId: string };
+
 const WAKEUP_SUMMARY_LIMIT = 3;
 const WAKEUP_FILE_HINT_LIMIT = 3;
 
@@ -70,6 +76,80 @@ export function buildCoordWakeupMessage({ relCoordDir, memberId, messages }: Wak
   ];
 
   return lines.filter(Boolean).join('\n');
+}
+
+function matchesConsensusScope(consensusEntry: ICoordTimelineEntry, candidate: ICoordTimelineEntry): boolean {
+  if (consensusEntry.task_id && candidate.task_id) {
+    return consensusEntry.task_id === candidate.task_id;
+  }
+  if (consensusEntry.task_id && !candidate.task_id) {
+    return false;
+  }
+  if (consensusEntry.topic && candidate.topic) {
+    return consensusEntry.topic === candidate.topic;
+  }
+  if (consensusEntry.topic && !candidate.topic) {
+    return false;
+  }
+  return true;
+}
+
+export function evaluateConsensusProgress(
+  timeline: ICoordTimelineEntry[],
+  members: IAgentTeamMember[]
+): ConsensusProgress {
+  const latestConsensus = timeline
+    .map((entry, index) => ({ entry, index }))
+    .slice()
+    .toReversed()
+    .find(({ entry }) => entry.type === 'consensus');
+
+  if (!latestConsensus) {
+    return { status: 'inactive' };
+  }
+
+  const { entry: consensusEntry, index: consensusIndex } = latestConsensus;
+  const hasUserMessageAfterConsensus = timeline.slice(consensusIndex + 1).some((entry) => entry.role === 'user');
+  if (hasUserMessageAfterConsensus) {
+    return { status: 'inactive' };
+  }
+
+  const consensusWindow = timeline.slice(consensusIndex + 1);
+  const latestDecision = consensusWindow
+    .map((entry, index) => ({ entry, index }))
+    .slice()
+    .toReversed()
+    .find(({ entry }) => {
+      return (entry.type === 'decision' || entry.type === 'conclusion') && matchesConsensusScope(consensusEntry, entry);
+    });
+
+  if (!latestDecision) {
+    return { status: 'waiting-decision' };
+  }
+
+  const decisionWindow = consensusWindow.slice(latestDecision.index);
+  const finalDecisionId = latestDecision.entry.id;
+  const ackFroms = new Set(
+    decisionWindow
+      .filter((entry) => entry.type === 'ack' && entry.reply_to === finalDecisionId)
+      .map((entry) => entry.from)
+  );
+
+  const missingConversationIds = members
+    .filter(
+      (member) => ![member.memberId, member.name, member.conversationId].some((identity) => ackFroms.has(identity))
+    )
+    .map((member) => member.conversationId);
+
+  if (missingConversationIds.length === 0) {
+    return { status: 'reached', finalDecisionId };
+  }
+
+  return {
+    status: 'awaiting-acks',
+    finalDecisionId,
+    missingConversationIds,
+  };
 }
 
 /**
@@ -284,50 +364,26 @@ export class CoordDispatcher {
     if (state.pendingMessages.length > 0) return;
 
     const timeline = this.watcher.readAll();
-    const consensusIndex = [...timeline]
-      .map((entry, index) => ({ entry, index }))
-      .toReversed()
-      .find(({ entry }) => entry.type === 'consensus')?.index;
+    const progress = evaluateConsensusProgress(timeline, this.members);
 
-    if (consensusIndex === undefined) {
+    if (progress.status === 'inactive' || progress.status === 'waiting-decision') {
       state.lastConsensusSignature = undefined;
       return;
     }
 
-    // If user sent a new message after the consensus, the consensus is superseded — stop enforcing it
-    const hasUserMessageAfterConsensus = timeline.slice(consensusIndex + 1).some((entry) => entry.role === 'user');
-    if (hasUserMessageAfterConsensus) {
-      state.lastConsensusSignature = undefined;
-      return;
-    }
-
-    const consensusWindow = timeline.slice(consensusIndex);
-    const decisionIndexInWindow = [...consensusWindow]
-      .map((entry, index) => ({ entry, index }))
-      .toReversed()
-      .find(({ entry }) => entry.type === 'decision' || entry.type === 'conclusion')?.index;
-
-    const decisionWindow = decisionIndexInWindow === undefined ? [] : consensusWindow.slice(decisionIndexInWindow);
-    const finalDecisionId = decisionWindow[0]?.id;
-    // Only count ACKs whose reply_to matches the final decision (strict protocol requirement)
-    const ackFroms = new Set(
-      decisionWindow
-        .filter((entry) => entry.type === 'ack' && finalDecisionId && entry.reply_to === finalDecisionId)
-        .map((entry) => entry.from)
-    );
-
-    const missingMembers = Array.from(this.memberStates.values()).filter(({ member }) => {
-      return ![member.memberId, member.name, member.conversationId].some((identity) => ackFroms.has(identity));
-    });
-
-    if (missingMembers.length === 0) {
+    if (progress.status === 'reached') {
       state.lastConsensusSignature = undefined;
       this.onConsensusReached?.();
       return;
     }
 
-    const signature = `${decisionWindow[0]?.id || 'no-decision'}:${missingMembers
-      .map((member) => member.member.memberId)
+    const missingMembers = progress.missingConversationIds
+      .map((conversationId) => this.memberStates.get(conversationId))
+      .filter((memberState): memberState is MemberState => Boolean(memberState));
+
+    const signature = `${progress.finalDecisionId}:${missingMembers
+      .map((memberState) => memberState.member.memberId)
+      .slice()
       .toSorted()
       .join(',')}`;
     if (state.lastConsensusSignature === signature) {
