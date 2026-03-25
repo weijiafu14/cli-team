@@ -21,7 +21,8 @@ import CodexSendBox from './CodexSendBox';
 const CodexChat: React.FC<{
   conversation_id: string;
   workspace: string;
-}> = ({ conversation_id, workspace }) => {
+  initialScrollTargetOnLoad?: 'bottom' | 'latest-right';
+}> = ({ conversation_id, workspace, initialScrollTargetOnLoad }) => {
   useMessageLstCache(conversation_id);
   const updateLocalImage = LocalImageView.useUpdateLocalImage();
   useEffect(() => {
@@ -31,7 +32,7 @@ const CodexChat: React.FC<{
     <ConversationProvider value={{ conversationId: conversation_id, workspace, type: 'codex' }}>
       <div className='flex-1 flex flex-col px-20px min-h-0'>
         <FlexFullContainer>
-          <MessageList className='flex-1'></MessageList>
+          <MessageList className='flex-1' initialScrollTargetOnLoad={initialScrollTargetOnLoad}></MessageList>
         </FlexFullContainer>
         <ConversationChatConfirm conversation_id={conversation_id}>
           <CodexSendBox conversation_id={conversation_id} />

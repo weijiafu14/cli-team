@@ -142,7 +142,9 @@ const MessageItem: React.FC<{ message: TMessage; highlighted?: boolean }> = Reac
     prev.highlighted === next.highlighted
 );
 
-const MessageList: React.FC<{ className?: string }> = () => {
+const MessageList: React.FC<{ className?: string; initialScrollTargetOnLoad?: 'bottom' | 'latest-right' }> = ({
+  initialScrollTargetOnLoad,
+}) => {
   const list = useMessageList();
   const conversationContext = useConversationContextSafe();
   const { t } = useTranslation();
@@ -231,6 +233,26 @@ const MessageList: React.FC<{ className?: string }> = () => {
     return result;
   }, [list]);
 
+  const initialScrollTargetIndex = useMemo(() => {
+    if (!initialScrollTargetOnLoad || processedList.length === 0) {
+      return undefined;
+    }
+    if (initialScrollTargetOnLoad === 'bottom') {
+      return 'LAST' as const;
+    }
+    for (let i = processedList.length - 1; i >= 0; i--) {
+      const item = processedList[i];
+      if ('type' in item && (item.type === 'tool_summary' || item.type === 'file_summary')) {
+        continue;
+      }
+      const message = item as TMessage;
+      if (message.position === 'right') {
+        return i;
+      }
+    }
+    return 'LAST' as const;
+  }, [initialScrollTargetOnLoad, processedList]);
+
   // Use auto-scroll hook
   const {
     virtuosoRef,
@@ -243,6 +265,7 @@ const MessageList: React.FC<{ className?: string }> = () => {
   } = useAutoScroll({
     messages: list,
     itemCount: processedList.length,
+    initialScrollTargetIndex,
   });
 
   useEffect(() => {
@@ -348,7 +371,6 @@ const MessageList: React.FC<{ className?: string }> = () => {
             ref={virtuosoRef}
             className='flex-1 h-full pb-10px box-border'
             data={processedList}
-            initialTopMostItemIndex={processedList.length > 0 ? processedList.length - 1 : 0}
             atBottomThreshold={100}
             increaseViewportBy={200}
             itemContent={renderItem}

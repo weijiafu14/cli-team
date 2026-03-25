@@ -107,7 +107,7 @@ describe('evaluateConsensusProgress', () => {
     expect(progress).toEqual({ status: 'waiting-decision' });
   });
 
-  it('tracks only the latest scoped decision and requires fresh ACKs for it', () => {
+  it('treats an earlier fully-ACKed decision as already resolved even if a later decision appears', () => {
     const progress = evaluateConsensusProgress(
       [
         createEntry({
@@ -158,9 +158,131 @@ describe('evaluateConsensusProgress', () => {
     );
 
     expect(progress).toEqual({
+      status: 'reached',
+      finalDecisionId: 'decision-1',
+    });
+  });
+
+  it('does not let a later scoped conclusion steal the ACK target from an existing decision', () => {
+    const progress = evaluateConsensusProgress(
+      [
+        createEntry({
+          id: 'consensus-1',
+          type: 'consensus',
+          topic: 'afe7e031',
+          task_id: 'afe7e031',
+        }),
+        createEntry({
+          id: 'decision-1',
+          from: '7af95706',
+          role: 'agent',
+          type: 'decision',
+          topic: 'afe7e031',
+          task_id: 'afe7e031',
+        }),
+        createEntry({
+          id: 'ack-1',
+          from: 'member-codex',
+          role: 'agent',
+          type: 'ack',
+          reply_to: 'decision-1',
+        }),
+        createEntry({
+          id: 'conclusion-1',
+          from: '7af95706',
+          role: 'agent',
+          type: 'conclusion',
+          topic: 'afe7e031',
+          task_id: 'afe7e031',
+        }),
+      ],
+      members
+    );
+
+    expect(progress).toEqual({
       status: 'awaiting-acks',
-      finalDecisionId: 'decision-2',
+      finalDecisionId: 'decision-1',
       missingConversationIds: ['conv-claude'],
+    });
+  });
+
+  it('waits for a decision when the window only contains a scoped conclusion', () => {
+    const progress = evaluateConsensusProgress(
+      [
+        createEntry({
+          id: 'consensus-1',
+          type: 'consensus',
+          topic: 'afe7e031',
+          task_id: 'afe7e031',
+        }),
+        createEntry({
+          id: 'conclusion-1',
+          from: '7af95706',
+          role: 'agent',
+          type: 'conclusion',
+          topic: 'afe7e031',
+          task_id: 'afe7e031',
+        }),
+        createEntry({
+          id: 'ack-1',
+          from: 'member-codex',
+          role: 'agent',
+          type: 'ack',
+          reply_to: 'conclusion-1',
+        }),
+      ],
+      members
+    );
+
+    expect(progress).toEqual({ status: 'waiting-decision' });
+  });
+
+  it('ends consensus once any scoped decision already has full ACK coverage, even if a later decision appears', () => {
+    const progress = evaluateConsensusProgress(
+      [
+        createEntry({
+          id: 'consensus-1',
+          type: 'consensus',
+          topic: 'afe7e031',
+          task_id: 'afe7e031',
+        }),
+        createEntry({
+          id: 'decision-1',
+          from: '7af95706',
+          role: 'agent',
+          type: 'decision',
+          topic: 'afe7e031',
+          task_id: 'afe7e031',
+        }),
+        createEntry({
+          id: 'ack-1',
+          from: 'member-codex',
+          role: 'agent',
+          type: 'ack',
+          reply_to: 'decision-1',
+        }),
+        createEntry({
+          id: 'ack-2',
+          from: 'member-claude',
+          role: 'agent',
+          type: 'ack',
+          reply_to: 'decision-1',
+        }),
+        createEntry({
+          id: 'decision-2',
+          from: '7af95706',
+          role: 'agent',
+          type: 'decision',
+          topic: 'afe7e031',
+          task_id: 'afe7e031',
+        }),
+      ],
+      members
+    );
+
+    expect(progress).toEqual({
+      status: 'reached',
+      finalDecisionId: 'decision-1',
     });
   });
 

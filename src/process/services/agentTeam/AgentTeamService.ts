@@ -30,8 +30,16 @@ function getRelativeCoordDir(teamId: string): string {
   return `.agents/teams/${teamId}/coord`;
 }
 
-function generateTeamMd(teamName: string, members: Array<{ name: string; type: string; backend?: string; memberId: string }>, teamId: string): string {
-  const memberLines = members.map((m) => `- **${m.name}** (type: ${m.type}${m.backend ? `, backend: ${m.backend}` : ''}, memberId: ${m.memberId})`).join('\n');
+function generateTeamMd(
+  teamName: string,
+  members: Array<{ name: string; type: string; backend?: string; memberId: string }>,
+  teamId: string
+): string {
+  const memberLines = members
+    .map(
+      (m) => `- **${m.name}** (type: ${m.type}${m.backend ? `, backend: ${m.backend}` : ''}, memberId: ${m.memberId})`
+    )
+    .join('\n');
   return `# Agent Team: ${teamName}
 
 ## Members
@@ -150,7 +158,9 @@ export class AgentTeamService {
     await this.ensureTeamWorkspace(coordDir, workspace, teamName, memberDefs, teamId);
 
     const memberConversations = await Promise.all(
-      memberDefs.map((member) => this.createMemberConversation(member, workspace, customWorkspace, teamId, teamName, coordDir))
+      memberDefs.map((member) =>
+        this.createMemberConversation(member, workspace, customWorkspace, teamId, teamName, coordDir)
+      )
     );
 
     const members = memberConversations.map((conversation, index) => {
@@ -248,7 +258,7 @@ export class AgentTeamService {
             entry,
           });
         }
-      },
+      }
     );
     dispatcher.start();
     this.dispatchers.set(teamConversation.id, dispatcher);
@@ -434,11 +444,14 @@ export class AgentTeamService {
           },
         },
       } as Partial<TChatConversation>,
-      false,
+      false
     );
   }
 
-  private async resolveWorkspace(workspace?: string, customWorkspace?: boolean): Promise<{
+  private async resolveWorkspace(
+    workspace?: string,
+    customWorkspace?: boolean
+  ): Promise<{
     workspace: string;
     customWorkspace: boolean;
   }> {
@@ -464,7 +477,7 @@ export class AgentTeamService {
     workspace: string,
     teamName: string,
     memberDefs: Array<{ name: string; type: string; backend?: string; memberId: string }>,
-    teamId: string,
+    teamId: string
   ): Promise<void> {
     // Coord runtime directories
     await fs.mkdir(path.join(coordDir, 'scripts'), { recursive: true });
@@ -528,7 +541,9 @@ export class AgentTeamService {
     await this.writeIfChanged(path.join(scriptsDst, 'coord_write.py'), EMBEDDED_COORD_WRITE_PY);
   }
 
-  private async syncTeamWorkspaceAssets(teamConversation: Extract<TChatConversation, { type: 'agent-team' }>): Promise<void> {
+  private async syncTeamWorkspaceAssets(
+    teamConversation: Extract<TChatConversation, { type: 'agent-team' }>
+  ): Promise<void> {
     const { workspace, coordDir, members } = teamConversation.extra;
     await this.ensureTeamWorkspace(
       coordDir,
@@ -540,7 +555,7 @@ export class AgentTeamService {
         backend: member.backend,
         memberId: member.memberId,
       })),
-      teamConversation.id,
+      teamConversation.id
     );
   }
 
@@ -550,7 +565,7 @@ export class AgentTeamService {
     customWorkspace: boolean,
     teamId: string,
     teamName: string,
-    coordDir: string,
+    coordDir: string
   ): Promise<Extract<TChatConversation, { type: 'gemini' }> | Extract<TChatConversation, { type: 'acp' }>> {
     const presetPrompt = generatePresetPrompt(teamName, member.name, member.memberId, teamId);
 
@@ -565,7 +580,7 @@ export class AgentTeamService {
         undefined,
         member.enabledSkills,
         member.presetAssistantId,
-        resolveDefaultSessionMode(member),
+        resolveDefaultSessionMode(member)
       );
       return {
         ...geminiConversation,
@@ -659,7 +674,7 @@ Agents must not ignore user guidance, and must not flatter the user instead of d
 5. If content is longer than the inline threshold, store it as an attachment and only keep a short preview inline.
 6. Development work is claim-based. Before starting implementation work, the agent should write \`intent\` or \`claim\`, and acquire a lock when the work is mutually exclusive.
 7. After finishing development work, the agent must publish a design document and attach it in the coordination stream before marking the work as complete.
-8. If the user says the team must reach consensus, no agent may stop at a private judgment. The team must continue until explicit ACK messages are exchanged on the same final conclusion.
+8. If the user says the team must reach consensus, no agent may stop at a private judgment. The team must continue until explicit ACK messages are exchanged on the same final decision.
 
 ## Required Fields
 
@@ -782,27 +797,29 @@ The completion message should either:
 After the user gives a task, agents should continue coordinating through this protocol and should not come back to the user until:
 
 1. the task is completed, or
-2. all active agents agree on the same blocker or conclusion
+2. all active agents agree on the same blocker or final decision
 
 One agent disagreement means the task is not yet settled.
 
 If the user explicitly says that agents must reach consensus, the task enters \`consensus-required\` mode. In this mode:
 
-1. agents must keep working and exchanging evidence until a final \`decision\` or \`conclusion\` message exists,
-2. every active agent must send an explicit \`ack\` that references that exact final message via \`reply_to\`,
-3. the ACK must state whether the agent agrees, what evidence supports the agreement, or why it still disagrees,
-4. no agent may return to the user before all active agents have ACKed the same final message,
-5. silence is not agreement, and partial implementation is not completion,
-6. if any active agent has not ACKed, the task is still open.
+1. agents must keep working and exchanging evidence until a final \`decision\` message exists,
+2. **Before publishing a \`decision\`, an agent MUST read the timeline to check if another agent has already published one for the same topic. If an identical or acceptable decision exists, ACK it instead of publishing a new one.**
+3. \`conclusion\` may be used later as a human-facing summary, but it must not replace the ACK target created by the final \`decision\`.
+4. every active agent must send an explicit \`ack\` that references that exact final \`decision\` message via \`reply_to\`,
+5. the ACK must state whether the agent agrees, what evidence supports the agreement, or why it still disagrees,
+6. no agent may return to the user before all active agents have ACKed the same final \`decision\`,
+7. silence is not agreement, and partial implementation is not completion,
+8. if any active agent has not ACKed, the task is still open.
 
 \`ack\` is not optional politeness. It is the protocol-level proof that consensus has been reached.
 
 When a consensus-required task is active, agents must not:
 
 1. stop after their own local conclusion,
-2. report “done” before all active agents ACK the same conclusion,
+2. report “done” before all active agents ACK the same final \`decision\`,
 3. treat “I already fixed my part” as completion,
-4. drop back to the user for narration unless there is already a shared ACKed conclusion or a shared ACKed blocker.
+4. drop back to the user for narration unless there is already a shared ACKed \`decision\` or a shared ACKed blocker.
 
 When the user sends a \`direction\` message, the active agents should respond in-stream before continuing. At least one response should state:
 

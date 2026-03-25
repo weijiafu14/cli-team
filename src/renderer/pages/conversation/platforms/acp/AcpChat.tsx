@@ -20,14 +20,15 @@ const AcpChat: React.FC<{
   backend: AcpBackend;
   sessionMode?: string;
   agentName?: string;
-}> = ({ conversation_id, workspace, backend, sessionMode, agentName }) => {
+  initialScrollTargetOnLoad?: 'bottom' | 'latest-right';
+}> = ({ conversation_id, workspace, backend, sessionMode, agentName, initialScrollTargetOnLoad }) => {
   useMessageLstCache(conversation_id);
 
   return (
     <ConversationProvider value={{ conversationId: conversation_id, workspace, type: 'acp' }}>
       <div className='flex-1 flex flex-col px-20px min-h-0'>
         <FlexFullContainer>
-          <MessageList className='flex-1'></MessageList>
+          <MessageList className='flex-1' initialScrollTargetOnLoad={initialScrollTargetOnLoad}></MessageList>
         </FlexFullContainer>
         <ConversationChatConfirm conversation_id={conversation_id}>
           <AcpSendBox

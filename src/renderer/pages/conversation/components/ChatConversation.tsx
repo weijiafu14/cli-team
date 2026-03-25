@@ -195,6 +195,7 @@ const ChatConversation: React.FC<{
             backend={conversation.extra?.backend || 'claude'}
             sessionMode={conversation.extra?.sessionMode}
             agentName={(conversation.extra as { agentName?: string })?.agentName}
+            initialScrollTargetOnLoad={conversation.extra?.teamId ? 'latest-right' : undefined}
           ></AcpChat>
         );
       case 'codex': // Legacy: new Codex conversations use ACP protocol. Kept for existing sessions.
@@ -203,6 +204,7 @@ const ChatConversation: React.FC<{
             key={conversation.id}
             conversation_id={conversation.id}
             workspace={conversation.extra?.workspace}
+            initialScrollTargetOnLoad={(conversation.extra as { teamId?: string })?.teamId ? 'latest-right' : undefined}
           />
         );
       case 'openclaw-gateway':

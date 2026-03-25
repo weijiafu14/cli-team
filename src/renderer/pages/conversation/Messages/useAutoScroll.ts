@@ -21,6 +21,8 @@ interface UseAutoScrollOptions {
   messages: TMessage[];
   /** Total item count for scroll target */
   itemCount: number;
+  /** Optional initial scroll target for the first DB-backed load */
+  initialScrollTargetIndex?: number | 'LAST';
 }
 
 interface UseAutoScrollReturn {
@@ -40,7 +42,11 @@ interface UseAutoScrollReturn {
   hideScrollButton: () => void;
 }
 
-export function useAutoScroll({ messages, itemCount }: UseAutoScrollOptions): UseAutoScrollReturn {
+export function useAutoScroll({
+  messages,
+  itemCount,
+  initialScrollTargetIndex,
+}: UseAutoScrollOptions): UseAutoScrollReturn {
   const virtuosoRef = useRef<VirtuosoHandle>(null);
   const [showScrollButton, setShowScrollButton] = useState(false);
 
@@ -101,11 +107,12 @@ export function useAutoScroll({ messages, itemCount }: UseAutoScrollOptions): Us
     lastScrollTopRef.current = currentScrollTop;
   }, []);
 
-  // Force scroll when user sends a message
+  // Force scroll when user sends a message, and optionally on initial DB load
   useEffect(() => {
     const currentListLength = messages.length;
     const prevLength = previousListLengthRef.current;
     const isNewMessage = currentListLength > prevLength;
+    const isInitialLoad = initialScrollTargetIndex !== undefined && prevLength === 0 && currentListLength > 0;
 
     previousListLengthRef.current = currentListLength;
 
@@ -114,8 +121,10 @@ export function useAutoScroll({ messages, itemCount }: UseAutoScrollOptions): Us
     const lastMessage = messages[messages.length - 1];
 
     // User sent a message - force scroll regardless of userScrolled state
-    // Also force scroll on initial load (0 -> N messages)
-    if (lastMessage?.position === 'right' || (prevLength === 0 && currentListLength > 0)) {
+    // Optionally enable the same behavior for the first DB-backed load in
+    // child agent conversations, so opening the child room can jump to a more
+    // meaningful initial target (e.g. latest right-side wakeup message).
+    if (lastMessage?.position === 'right' || isInitialLoad) {
       userScrolledRef.current = false;
       // Use double RAF to ensure DOM is updated before scrolling (#977)
       // 使用双 RAF 确保 DOM 更新后再滚动
@@ -123,10 +132,8 @@ export function useAutoScroll({ messages, itemCount }: UseAutoScrollOptions): Us
         requestAnimationFrame(() => {
           if (virtuosoRef.current) {
             lastProgrammaticScrollTimeRef.current = Date.now();
-            // Use scrollTo with bottom alignment for reliable scroll to end
-            // 使用 scrollTo 并设置 bottom 对齐以确保可靠滚动到底部
             virtuosoRef.current.scrollToIndex({
-              index: 'LAST',
+              index: isInitialLoad ? initialScrollTargetIndex! : 'LAST',
               behavior: 'auto',
               align: 'end',
             });
