@@ -485,95 +485,11 @@ export default function AgentTeamChat({ conversation_id, workspace }: AgentTeamC
 
         {activeTab === 'timeline' ? (
           <div ref={timelineRef} className={styles.timeline}>
-            {timeline.length === 0 ? (
-              <div className={styles.empty}>No coordination messages yet. Send a message to start the team.</div>
-            ) : (
-              timeline.map((entry) => {
-                const memberInfo = memberMap.get(entry.from);
-                const logoBackend = entry.role === 'user' ? null : memberInfo?.backend || entry.from;
-                const logoSrc = logoBackend ? getAgentLogo(logoBackend) : null;
-                const displayName = entry.role === 'user' ? 'You' : memberInfo?.name || entry.from;
-                const dispatchLabel =
-                  entry.dispatch === 'targets' && entry.to
-                    ? `→ ${entry.to.map((t) => memberMap.get(t)?.name || t).join(', ')}`
-                    : entry.dispatch === 'none'
-                      ? '(no wakeup)'
-                      : null;
-                const imagePaths = entry.images || [];
-                const markdownFiles = (entry.files || []).filter(isMarkdownFile);
-                const otherFiles = (entry.files || []).filter((f) => !isMarkdownFile(f));
-
-                return (
-                  <div
-                    key={entry.id}
-                    className={`${styles.entry} ${entry.role === 'user' ? styles.entryUser : styles.entryAgent}`}
-                  >
-                    <div className={styles.entryHeader}>
-                      {logoSrc ? (
-                        <img src={logoSrc} alt='' className={styles.entryLogo} />
-                      ) : (
-                        <div className={styles.entryUserIcon}>
-                          {entry.role === 'user' ? 'U' : <SettingConfig />}
-                        </div>
-                      )}
-                      <span className={styles.entryFrom}>{displayName}</span>
-                      <span className={styles.entryType} style={getTypeBadgeStyle(entry.type)}>{entry.type}</span>
-                      {dispatchLabel && <span className={styles.entryDispatch}>{dispatchLabel}</span>}
-                      <span className={styles.entryTime}>{new Date(entry.ts).toLocaleTimeString()}</span>
-                    </div>
-                    <div className={styles.entrySummary}>
-                      {entry.summary.split(/\\n|\n/).map((line, idx, arr) => (
-                        <React.Fragment key={idx}>
-                          {line}
-                          {idx < arr.length - 1 && <br />}
-                        </React.Fragment>
-                      ))}
-                    </div>
-                    {(entry as any).attachment?.path ? (
-                      <MarkdownAttachment key={(entry as any).attachment.path} path={(entry as any).attachment.path} onReady={handleRichContentReady} />
-                    ) : entry.body ? (
-                      <div className={styles.entryBody}>
-                        <CollapsibleBody>
-                          <MarkdownView>{entry.body}</MarkdownView>
-                        </CollapsibleBody>
-                      </div>
-                    ) : null}
-                    {imagePaths.length > 0 && (
-                      <div className={styles.entryImages}>
-                        {imagePaths.map((imagePath) => (
-                          <ImageAttachment key={imagePath} path={imagePath} onReady={handleRichContentReady} />
-                        ))}
-                      </div>
-                    )}
-                    {markdownFiles.length > 0 && (
-                      <>
-                        {markdownFiles.map((filePath) => (
-                          <MarkdownAttachment key={filePath} path={filePath} onReady={handleRichContentReady} />
-                        ))}
-                        {otherFiles.length > 0 && (
-                          <div className={styles.entryFiles}>
-                            <HorizontalFileList>
-                              {otherFiles.map((filePath, i) => (
-                                <FilePreview key={`${filePath}-${i}`} path={filePath} onRemove={() => {}} readonly />
-                              ))}
-                            </HorizontalFileList>
-                          </div>
-                        )}
-                      </>
-                    )}
-                    {markdownFiles.length === 0 && otherFiles.length > 0 && (
-                      <div className={styles.entryFiles}>
-                        <HorizontalFileList>
-                          {otherFiles.map((filePath, i) => (
-                            <FilePreview key={`${filePath}-${i}`} path={filePath} onRemove={() => {}} readonly />
-                          ))}
-                        </HorizontalFileList>
-                      </div>
-                    )}
-                  </div>
-                );
-              })
-            )}
+            <TimelineList
+              timeline={timeline}
+              memberMap={memberMap}
+              handleRichContentReady={handleRichContentReady}
+            />
           </div>
         ) : (
           <AgentsMembersView conversation_id={conversation_id} />
@@ -639,6 +555,110 @@ export default function AgentTeamChat({ conversation_id, workspace }: AgentTeamC
     </ConversationProvider>
   );
 }
+
+const TimelineList = React.memo(function TimelineList({
+  timeline,
+  memberMap,
+  handleRichContentReady,
+}: {
+  timeline: ICoordTimelineEntry[];
+  memberMap: Map<string, { name: string; backend?: string; type: string }>;
+  handleRichContentReady: () => void;
+}) {
+  if (timeline.length === 0) {
+    return <div className={styles.empty}>No coordination messages yet. Send a message to start the team.</div>;
+  }
+
+  return (
+    <>
+      {timeline.map((entry) => {
+        const memberInfo = memberMap.get(entry.from);
+        const logoBackend = entry.role === 'user' ? null : memberInfo?.backend || entry.from;
+        const logoSrc = logoBackend ? getAgentLogo(logoBackend) : null;
+        const displayName = entry.role === 'user' ? 'You' : memberInfo?.name || entry.from;
+        const dispatchLabel =
+          entry.dispatch === 'targets' && entry.to
+            ? `→ ${entry.to.map((t) => memberMap.get(t)?.name || t).join(', ')}`
+            : entry.dispatch === 'none'
+              ? '(no wakeup)'
+              : null;
+        const imagePaths = entry.images || [];
+        const markdownFiles = (entry.files || []).filter(isMarkdownFile);
+        const otherFiles = (entry.files || []).filter((f) => !isMarkdownFile(f));
+
+        return (
+          <div
+            key={entry.id}
+            className={`${styles.entry} ${entry.role === 'user' ? styles.entryUser : styles.entryAgent}`}
+          >
+            <div className={styles.entryHeader}>
+              {logoSrc ? (
+                <img src={logoSrc} alt='' className={styles.entryLogo} />
+              ) : (
+                <div className={styles.entryUserIcon}>
+                  {entry.role === 'user' ? 'U' : <SettingConfig />}
+                </div>
+              )}
+              <span className={styles.entryFrom}>{displayName}</span>
+              <span className={styles.entryType} style={getTypeBadgeStyle(entry.type)}>{entry.type}</span>
+              {dispatchLabel && <span className={styles.entryDispatch}>{dispatchLabel}</span>}
+              <span className={styles.entryTime}>{new Date(entry.ts).toLocaleTimeString()}</span>
+            </div>
+            <div className={styles.entrySummary}>
+              {entry.summary.split(/\\n|\n/).map((line, idx, arr) => (
+                <React.Fragment key={idx}>
+                  {line}
+                  {idx < arr.length - 1 && <br />}
+                </React.Fragment>
+              ))}
+            </div>
+            {(entry as any).attachment?.path ? (
+              <MarkdownAttachment key={(entry as any).attachment.path} path={(entry as any).attachment.path} onReady={handleRichContentReady} />
+            ) : entry.body ? (
+              <div className={styles.entryBody}>
+                <CollapsibleBody>
+                  <MarkdownView>{entry.body}</MarkdownView>
+                </CollapsibleBody>
+              </div>
+            ) : null}
+            {imagePaths.length > 0 && (
+              <div className={styles.entryImages}>
+                {imagePaths.map((imagePath) => (
+                  <ImageAttachment key={imagePath} path={imagePath} onReady={handleRichContentReady} />
+                ))}
+              </div>
+            )}
+            {markdownFiles.length > 0 && (
+              <>
+                {markdownFiles.map((filePath) => (
+                  <MarkdownAttachment key={filePath} path={filePath} onReady={handleRichContentReady} />
+                ))}
+                {otherFiles.length > 0 && (
+                  <div className={styles.entryFiles}>
+                    <HorizontalFileList>
+                      {otherFiles.map((filePath, i) => (
+                        <FilePreview key={`${filePath}-${i}`} path={filePath} onRemove={() => {}} readonly />
+                      ))}
+                    </HorizontalFileList>
+                  </div>
+                )}
+              </>
+            )}
+            {markdownFiles.length === 0 && otherFiles.length > 0 && (
+              <div className={styles.entryFiles}>
+                <HorizontalFileList>
+                  {otherFiles.map((filePath, i) => (
+                    <FilePreview key={`${filePath}-${i}`} path={filePath} onRemove={() => {}} readonly />
+                  ))}
+                </HorizontalFileList>
+              </div>
+            )}
+          </div>
+        );
+      })}
+    </>
+  );
+});
 
 function AgentsMembersView({ conversation_id }: { conversation_id: string }) {
   const [members, setMembers] = useState<Array<{ id: string; name: string; type: string; backend?: string }>>([]);
