@@ -207,5 +207,10 @@
     "request_sent": "生成请求已发送",
     "failed": "生成失败",
     "preset_registered": "已保存为全局预设"
+  },
+  "agentTeam": {
+    "interruptNextSend": "打断下一次发送",
+    "interruptTitle": "为下一条消息开启打断模式",
+    "interruptActiveTitle": "打断模式已开启：下一条消息会打断被 @ 的成员；如果没有 @，则打断全员"
   }
 }

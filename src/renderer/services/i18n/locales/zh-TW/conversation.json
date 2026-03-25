@@ -207,5 +207,10 @@
     "request_sent": "Request sent to agent",
     "failed": "Failed to generate",
     "preset_registered": "Agent preset registered successfully!"
+  },
+  "agentTeam": {
+    "interruptNextSend": "中斷下一次發送",
+    "interruptTitle": "為下一則訊息開啟中斷模式",
+    "interruptActiveTitle": "中斷模式已開啟：下一則訊息會中斷被 @ 的成員；若沒有 @，則中斷全員"
   }
 }

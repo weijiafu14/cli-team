@@ -38,7 +38,7 @@ export function initAgentTeamBridge(agentTeamService: AgentTeamService): void {
     }
   });
 
-  ipcBridge.agentTeam.sendMessage.provider(async ({ conversation_id, input, msg_id, files, targets }) => {
+  ipcBridge.agentTeam.sendMessage.provider(async ({ conversation_id, input, msg_id, files, targets, interrupt }) => {
     try {
       const entry = await agentTeamService.sendMessage({
         conversationId: conversation_id,
@@ -46,6 +46,7 @@ export function initAgentTeamBridge(agentTeamService: AgentTeamService): void {
         msgId: msg_id,
         files,
         targets,
+        interrupt,
       });
       // Emit timeline update so frontend sees the message immediately
       ipcBridge.agentTeam.timelineStream.emit({ conversation_id, entry });

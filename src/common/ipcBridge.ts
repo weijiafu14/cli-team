@@ -141,6 +141,8 @@ export interface IAgentTeamSendMessageParams {
   files?: string[];
   /** Target member IDs for selective wakeup (@mention). When set, only these agents are woken. */
   targets?: string[];
+  /** When true, kill target agents before sending — used to break out of stuck/frozen states. */
+  interrupt?: boolean;
 }
 
 export const agentTeam = {

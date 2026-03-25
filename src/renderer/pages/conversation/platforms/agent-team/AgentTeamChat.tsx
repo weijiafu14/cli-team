@@ -17,10 +17,10 @@ import { getAgentLogo } from '@/renderer/utils/model/agentLogo';
 import type { IAgentTeamMember } from '@/common/storage';
 import type { FileMetadata } from '@/renderer/services/FileService';
 import { useNavigate } from 'react-router-dom';
-import { PauseOne, SettingConfig } from '@icon-park/react';
+import { Lightning, PauseOne, SettingConfig } from '@icon-park/react';
 import { Image } from '@arco-design/web-react';
+import { useTranslation } from 'react-i18next';
 import MentionDropdown from '@/renderer/pages/guid/components/MentionDropdown';
-import type { MentionOption } from '@/renderer/pages/guid/types';
 import styles from './AgentTeamChat.module.css';
 
 type AgentTeamChatProps = {
@@ -241,6 +241,7 @@ function ImageAttachment({ path: filePath, onReady }: { path: string; onReady?: 
 }
 
 export default function AgentTeamChat({ conversation_id, workspace }: AgentTeamChatProps) {
+  const { t } = useTranslation();
   const [activeTab, setActiveTab] = useState<'timeline' | 'agents'>('timeline');
   const [timeline, setTimeline] = useState<ICoordTimelineEntry[]>([]);
   const [inputValue, setInputValue] = useState('');
@@ -251,8 +252,10 @@ export default function AgentTeamChat({ conversation_id, workspace }: AgentTeamC
   const [memberList, setMemberList] = useState<IAgentTeamMember[]>([]);
   const [pendingFiles, setPendingFiles] = useState<FileMetadata[]>([]);
   const [aborting, setAborting] = useState(false);
+  const [interruptMode, setInterruptMode] = useState(false);
   const [mentionQuery, setMentionQuery] = useState<string | null>(null);
   const [mentionIndex, setMentionIndex] = useState(0);
+  const mentionMenuRef = useRef<HTMLDivElement>(null);
   const scrollBehaviorRef = useRef<'smooth' | 'auto'>('auto');
   const keepPinnedToBottomRef = useRef(false);
   const keepPinnedTimerRef = useRef<number | null>(null);
@@ -361,14 +364,6 @@ export default function AgentTeamChat({ conversation_id, workspace }: AgentTeamC
     },
   });
   const workspaceLabel = getPathTailLabel(workspace);
-  const timelineCount = timeline.length;
-  const mentionableCount = memberList.length;
-  const latestEntry = timeline[timeline.length - 1];
-  const latestActor = latestEntry
-    ? latestEntry.role === 'user'
-      ? 'You'
-      : memberMap.get(latestEntry.from)?.name || latestEntry.from
-    : null;
 
   // Load team members for avatar mapping and @mention list
   useEffect(() => {
@@ -454,6 +449,7 @@ export default function AgentTeamChat({ conversation_id, workspace }: AgentTeamC
         }
       }
 
+      const shouldInterrupt = interruptMode;
       setSending(true);
       try {
         const filePaths = pendingFiles.length > 0 ? pendingFiles.map((f) => f.path) : undefined;
@@ -462,6 +458,7 @@ export default function AgentTeamChat({ conversation_id, workspace }: AgentTeamC
           input: text,
           files: filePaths,
           targets: mentionedIds.length > 0 ? mentionedIds : undefined,
+          interrupt: shouldInterrupt || undefined,
         });
         if (result.success && result.data?.entry) {
           setTimeline((prev) => mergeTimelineEntries(prev, result.data!.entry));
@@ -471,9 +468,13 @@ export default function AgentTeamChat({ conversation_id, workspace }: AgentTeamC
         console.error('[AgentTeamChat] Send failed:', err);
       } finally {
         setSending(false);
+        // Always reset interrupt mode after sending (success or failure)
+        if (shouldInterrupt) {
+          setInterruptMode(false);
+        }
       }
     },
-    [conversation_id, pendingFiles, memberList]
+    [conversation_id, pendingFiles, memberList, interruptMode]
   );
 
   const contextValue = useMemo(
@@ -538,7 +539,7 @@ export default function AgentTeamChat({ conversation_id, workspace }: AgentTeamC
           {mentionSuggestions.length > 0 && mentionQuery !== null && (
             <div className='absolute bottom-100% mb-8px left-20px z-10 w-240px'>
               <MentionDropdown
-                menuRef={{ current: null } as any}
+                menuRef={mentionMenuRef}
                 options={mentionSuggestions.map((m) => ({
                   key: m.name,
                   label: m.name,
@@ -580,6 +581,28 @@ export default function AgentTeamChat({ conversation_id, workspace }: AgentTeamC
                 <FileAttachButton openFileSelector={openFileSelector} onLocalFilesAdded={handleFilesAdded} />
                 <button
                   type='button'
+                  className={`${styles.interruptButton} ${interruptMode ? styles.interruptActive : ''}`}
+                  onClick={() => setInterruptMode((prev) => !prev)}
+                  disabled={sending}
+                  aria-pressed={interruptMode}
+                  aria-label={t('conversation.agentTeam.interruptNextSend', {
+                    defaultValue: 'Interrupt next send',
+                  })}
+                  title={
+                    interruptMode
+                      ? t('conversation.agentTeam.interruptActiveTitle', {
+                          defaultValue:
+                            'Interrupt mode is on: the next message will interrupt the mentioned agents, or everyone if no @mention is used',
+                        })
+                      : t('conversation.agentTeam.interruptTitle', {
+                          defaultValue: 'Enable interrupt mode for the next send',
+                        })
+                  }
+                >
+                  <Lightning theme={interruptMode ? 'filled' : 'outline'} size='14' fill='currentColor' />
+                </button>
+                <button
+                  type='button'
                   className={styles.abortButton}
                   onClick={handleAbort}
                   disabled={aborting}
@@ -613,6 +636,7 @@ const TimelineList = React.memo(function TimelineList({
     <>
       {timeline.map((entry) => {
         const memberInfo = memberMap.get(entry.from);
+        const attachmentPath = (entry as ICoordTimelineEntry & { attachment?: { path?: string } }).attachment?.path;
         const logoBackend = entry.role === 'user' ? null : memberInfo?.backend || entry.from;
         const logoSrc = logoBackend ? getAgentLogo(logoBackend) : null;
         const displayName = entry.role === 'user' ? 'You' : memberInfo?.name || entry.from;
@@ -652,12 +676,8 @@ const TimelineList = React.memo(function TimelineList({
                 </React.Fragment>
               ))}
             </div>
-            {(entry as any).attachment?.path ? (
-              <MarkdownAttachment
-                key={(entry as any).attachment.path}
-                path={(entry as any).attachment.path}
-                onReady={handleRichContentReady}
-              />
+            {attachmentPath ? (
+              <MarkdownAttachment key={attachmentPath} path={attachmentPath} onReady={handleRichContentReady} />
             ) : entry.body ? (
               <div className={styles.entryBody}>
                 <CollapsibleBody>

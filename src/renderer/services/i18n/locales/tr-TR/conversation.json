@@ -207,6 +207,11 @@
     "cliAgents": "CLI Agents",
     "presetAssistants": "Preset Assistants"
   },
+  "agentTeam": {
+    "interruptNextSend": "Sonraki gönderimi kes",
+    "interruptTitle": "Sonraki gönderim için kesme modunu aç",
+    "interruptActiveTitle": "Kesme modu açık: sonraki mesaj @ ile belirtilen üyeleri, @ yoksa tüm üyeleri durdurur"
+  },
   "noAgentsAvailable": "No agents available",
   "noModelConfigured": "No model configured. Please configure in settings.",
   "createFailed": "Failed to create conversation"

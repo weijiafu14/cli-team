@@ -207,5 +207,10 @@
     "request_sent": "Request sent to agent",
     "failed": "Failed to generate",
     "preset_registered": "Agent preset registered successfully!"
+  },
+  "agentTeam": {
+    "interruptNextSend": "Interrupt next send",
+    "interruptTitle": "Enable interrupt mode for the next send",
+    "interruptActiveTitle": "Interrupt mode is on: the next message will interrupt the mentioned agents, or everyone if no @mention is used"
   }
 }
