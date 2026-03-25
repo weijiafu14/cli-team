@@ -47,12 +47,14 @@ Each line in `messages.jsonl` is a JSON object:
 ## Knowledge Sedimentation
 
 The workspace `docs/tech/agent-team/` is the team's canonical memory. It contains:
+
 - `decisions/`: Architectural choices and rationale.
 - `pitfalls/`: Discovered traps, anti-patterns, and bug postmortems.
 - `workflows/`: Standard operating procedures.
 - `glossary/`: Domain terminology.
 
 **Rules:**
+
 1. **Consult before implementation:** If a task relates to an established area, you MUST read the relevant documents in `docs/tech/agent-team/` before writing code or proposing a design.
 2. **Land before done:** If your task resolves a complex bug, establishes a new pattern, or makes an architectural decision, you MUST write or update a document in `docs/tech/agent-team/` (under the appropriate sub-directory) capturing this knowledge BEFORE declaring the task `done`. Keep files small and focused.
 
