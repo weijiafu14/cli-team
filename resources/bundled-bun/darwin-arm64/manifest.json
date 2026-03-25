@@ -23,8 +23,6 @@
       "asset": "bun-darwin-aarch64.zip"
     }
   },
-  "files": [
-    "bun"
-  ],
+  "files": ["bun"],
   "skipped": false
 }

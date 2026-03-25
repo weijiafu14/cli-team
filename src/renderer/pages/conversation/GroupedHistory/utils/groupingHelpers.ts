@@ -65,7 +65,7 @@ export const groupConversationsByTimelineAndWorkspace = (
   const workspaceGroupsByTimeline = new Map<string, WorkspaceGroup[]>();
 
   allWorkspaceGroups.forEach((convList, workspace) => {
-    const sortedConvs = [...convList].sort((a, b) => getActivityTime(b) - getActivityTime(a));
+    const sortedConvs = [...convList].toSorted((a, b) => getActivityTime(b) - getActivityTime(a));
     const latestConv = sortedConvs[0];
     const timeline = getConversationTimelineLabel(latestConv, t);
 
@@ -143,7 +143,7 @@ export const buildGroupedHistory = (
 ): GroupedHistoryResult => {
   const pinnedConversations = conversations
     .filter((conversation) => isConversationPinned(conversation))
-    .sort((a, b) => {
+    .toSorted((a, b) => {
       const orderA = getConversationSortOrder(a);
       const orderB = getConversationSortOrder(b);
       if (orderA !== undefined && orderB !== undefined) return orderA - orderB;
@@ -166,7 +166,10 @@ export const buildGroupedHistory = (
  * @param workspaceConvs - conversations already filtered to this workspace (top-level only, no team children)
  * @param allConversations - full conversation list for looking up team children by teamId
  */
-function buildWorkspaceNodes(workspaceConvs: TChatConversation[], allConversations: TChatConversation[]): WorkspaceNode[] {
+function buildWorkspaceNodes(
+  workspaceConvs: TChatConversation[],
+  allConversations: TChatConversation[]
+): WorkspaceNode[] {
   const nodes: WorkspaceNode[] = [];
 
   for (const conv of workspaceConvs) {

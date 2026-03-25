@@ -3,6 +3,7 @@
 ## Entry Point: GuidPage
 
 ### Agent Pill Bar
+
 - `AgentPillBar.tsx` has an "Agent Team" pill at the end (uses `Peoples` icon)
 - Clicking it sets `selectedAgentKey = 'agent-team'`
 - GuidPage conditionally renders `TeamBuilder` instead of `GuidInputCard`
@@ -27,6 +28,7 @@ Card-based team creation form:
 `src/renderer/pages/conversation/platforms/agent-team/AgentTeamChat.tsx`
 
 ### Layout
+
 ```
 ┌──────────────────────────────┐
 │  Timeline  |  Agents         │  ← custom tab bar (not Arco Tabs)
@@ -46,6 +48,7 @@ Card-based team creation form:
 ### Timeline View
 
 Each entry renders:
+
 - **Agent logo** — resolved via `memberMap` (memberId → backend → `getAgentLogo()`)
 - **Display name** — member name from team roster, "You" for user messages
 - **Type badge** — claim, challenge, ack, decision, etc.
@@ -71,7 +74,7 @@ This ensures `entry.from` (which is a memberId) correctly maps to the right agen
 
 ```typescript
 // Sort by parsed Date, not string compare (handles UTC vs local tz)
-new Date(a.ts).getTime() - new Date(b.ts).getTime()
+new Date(a.ts).getTime() - new Date(b.ts).getTime();
 ```
 
 ### Agents View
@@ -131,13 +134,13 @@ case 'agent-team':
 
 ## Key Components Used
 
-| Component | From | Used For |
-|-----------|------|----------|
-| `SendBox` | `@/renderer/components/chat/sendbox` | IME-safe input with composition handling |
-| `FileAttachButton` | `@/renderer/components/media/FileAttachButton` | File upload button |
-| `FilePreview` | `@/renderer/components/media/FilePreview` | Image thumbnail / file card with remove |
-| `HorizontalFileList` | `@/renderer/components/media/HorizontalFileList` | Horizontal scrollable file list |
-| `MarkdownView` | `@/renderer/components/Markdown` | GFM markdown rendering for message body |
-| `getAgentLogo` | `@/renderer/utils/model/agentLogo` | Agent icon resolution by backend name |
-| `useOpenFileSelector` | `@/renderer/hooks/file/useOpenFileSelector` | Native file dialog via IPC |
-| `ConversationProvider` | `@/renderer/hooks/context/ConversationContext` | Context for conversation ID/type |
+| Component              | From                                             | Used For                                 |
+| ---------------------- | ------------------------------------------------ | ---------------------------------------- |
+| `SendBox`              | `@/renderer/components/chat/sendbox`             | IME-safe input with composition handling |
+| `FileAttachButton`     | `@/renderer/components/media/FileAttachButton`   | File upload button                       |
+| `FilePreview`          | `@/renderer/components/media/FilePreview`        | Image thumbnail / file card with remove  |
+| `HorizontalFileList`   | `@/renderer/components/media/HorizontalFileList` | Horizontal scrollable file list          |
+| `MarkdownView`         | `@/renderer/components/Markdown`                 | GFM markdown rendering for message body  |
+| `getAgentLogo`         | `@/renderer/utils/model/agentLogo`               | Agent icon resolution by backend name    |
+| `useOpenFileSelector`  | `@/renderer/hooks/file/useOpenFileSelector`      | Native file dialog via IPC               |
+| `ConversationProvider` | `@/renderer/hooks/context/ConversationContext`   | Context for conversation ID/type         |

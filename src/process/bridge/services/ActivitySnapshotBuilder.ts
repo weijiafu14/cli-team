@@ -107,9 +107,7 @@ export class ActivitySnapshotBuilder {
   build(): IExtensionAgentActivitySnapshot {
     const conversations = this.repo
       .getUserConversations(undefined, 0, 10000)
-      .data.filter(
-        (conv) => conv.type !== 'agent-team' && !(conv.extra as Record<string, unknown>)?.isHealthCheck
-      );
+      .data.filter((conv) => conv.type !== 'agent-team' && !(conv.extra as Record<string, unknown>)?.isHealthCheck);
 
     const byAgent = new Map<string, IExtensionAgentActivityItem>();
     let runningConversations = 0;
@@ -184,14 +182,14 @@ export class ActivitySnapshotBuilder {
         existing.state = state;
       }
 
-      existing.recentEvents = [...existing.recentEvents, ...events].sort((a, b) => b.at - a.at).slice(0, 6);
+      existing.recentEvents = [...existing.recentEvents, ...events].toSorted((a, b) => b.at - a.at).slice(0, 6);
     }
 
     return {
       generatedAt: Date.now(),
       totalConversations: conversations.length,
       runningConversations,
-      agents: Array.from(byAgent.values()).sort((a, b) => b.lastActiveAt - a.lastActiveAt),
+      agents: Array.from(byAgent.values()).toSorted((a, b) => b.lastActiveAt - a.lastActiveAt),
     };
   }
 }

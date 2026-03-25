@@ -178,54 +178,54 @@ const ChatLayout: React.FC<{
     <>
       <ConversationTabs />
       {!props.hideHeader && (
-      <ArcoLayout.Header
-        className={classNames(
-          'min-h-44px flex items-center justify-between px-16px pt-8px pb-10px gap-16px !bg-1 chat-layout-header chat-layout-header--glass overflow-hidden',
-          layout?.isMobile && 'chat-layout-header--mobile-unified'
-        )}
-      >
-        <div className='shrink-0'>{props.headerLeft}</div>
-        <FlexFullContainer className='h-full min-w-0' containerClassName='flex items-center gap-16px'>
-          {!layout?.isMobile && !hasTabs && (
-            <ChatTitleEditor
-              editingTitle={editingTitle}
-              titleDraft={titleDraft}
-              setTitleDraft={setTitleDraft}
-              setEditingTitle={setEditingTitle}
-              renameLoading={renameLoading}
-              canRenameTitle={canRenameTitle}
-              submitTitleRename={submitTitleRename}
-              titleAreaMaxWidth={titleAreaMaxWidth}
-              title={props.title}
-              conversationId={conversationId}
-            />
+        <ArcoLayout.Header
+          className={classNames(
+            'min-h-44px flex items-center justify-between px-16px pt-8px pb-10px gap-16px !bg-1 chat-layout-header chat-layout-header--glass overflow-hidden',
+            layout?.isMobile && 'chat-layout-header--mobile-unified'
           )}
-        </FlexFullContainer>
-        <div className='flex items-center gap-12px shrink-0'>
-          {props.headerExtra}
-          {(backend || agentLogo) && (
-            <AgentModeSelector
-              backend={backend}
-              agentName={displayName}
-              agentLogo={agentLogo}
-              agentLogoIsEmoji={agentLogoIsEmoji}
-              compact={Boolean(layout?.isMobile)}
-              showLogoInCompact={Boolean(layout?.isMobile)}
-              compactLabelType={layout?.isMobile ? 'agent' : 'mode'}
-            />
-          )}
-          {isWindowsRuntime && workspaceEnabled && (
-            <button
-              type='button'
-              className='workspace-header__toggle'
-              aria-label='Toggle workspace'
-              onClick={() => dispatchWorkspaceToggleEvent()}
-            >
-              {rightSiderCollapsed ? <ExpandRight size={16} /> : <ExpandLeft size={16} />}
-            </button>
-          )}
-        </div>
-      </ArcoLayout.Header>
+        >
+          <div className='shrink-0'>{props.headerLeft}</div>
+          <FlexFullContainer className='h-full min-w-0' containerClassName='flex items-center gap-16px'>
+            {!layout?.isMobile && !hasTabs && (
+              <ChatTitleEditor
+                editingTitle={editingTitle}
+                titleDraft={titleDraft}
+                setTitleDraft={setTitleDraft}
+                setEditingTitle={setEditingTitle}
+                renameLoading={renameLoading}
+                canRenameTitle={canRenameTitle}
+                submitTitleRename={submitTitleRename}
+                titleAreaMaxWidth={titleAreaMaxWidth}
+                title={props.title}
+                conversationId={conversationId}
+              />
+            )}
+          </FlexFullContainer>
+          <div className='flex items-center gap-12px shrink-0'>
+            {props.headerExtra}
+            {(backend || agentLogo) && (
+              <AgentModeSelector
+                backend={backend}
+                agentName={displayName}
+                agentLogo={agentLogo}
+                agentLogoIsEmoji={agentLogoIsEmoji}
+                compact={Boolean(layout?.isMobile)}
+                showLogoInCompact={Boolean(layout?.isMobile)}
+                compactLabelType={layout?.isMobile ? 'agent' : 'mode'}
+              />
+            )}
+            {isWindowsRuntime && workspaceEnabled && (
+              <button
+                type='button'
+                className='workspace-header__toggle'
+                aria-label='Toggle workspace'
+                onClick={() => dispatchWorkspaceToggleEvent()}
+              >
+                {rightSiderCollapsed ? <ExpandRight size={16} /> : <ExpandLeft size={16} />}
+              </button>
+            )}
+          </div>
+        </ArcoLayout.Header>
       )}
     </>
   );

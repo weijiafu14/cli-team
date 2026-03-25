@@ -18,7 +18,7 @@ vi.mock('mermaid', () => ({
       }
       return Promise.resolve({ svg: '<svg data-testid="mermaid-svg"></svg>' });
     }),
-  }
+  },
 }));
 
 import CodeBlock from '@/renderer/components/Markdown/CodeBlock';
@@ -36,8 +36,7 @@ global.MutationObserver = vi.fn().mockImplementation(() => ({
 
 describe('CodeBlock mermaid support', () => {
   it('renders a mermaid block natively via mermaid library', async () => {
-    render(<CodeBlock className="language-mermaid">graph TD;
-A--&gt;B;</CodeBlock>);
+    render(<CodeBlock className='language-mermaid'>graph TD; A--&gt;B;</CodeBlock>);
 
     // Wait for the async effect to resolve the mermaid svg
     await waitFor(() => {
@@ -46,7 +45,7 @@ A--&gt;B;</CodeBlock>);
   });
 
   it('renders an elegant error boundary for malformed mermaid syntax', async () => {
-    render(<CodeBlock className="language-mermaid">graph error;</CodeBlock>);
+    render(<CodeBlock className='language-mermaid'>graph error;</CodeBlock>);
 
     await waitFor(() => {
       expect(screen.getByText('Mermaid Syntax Error:')).toBeInTheDocument();

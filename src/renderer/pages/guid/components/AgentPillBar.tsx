@@ -125,11 +125,12 @@ const AgentPillBar: React.FC<AgentPillBarProps> = ({
             className={`font-medium text-14px ${selectedAgentKey === AGENT_TEAM_KEY ? 'font-semibold ml-4px' : isMobile ? 'max-w-0 opacity-0 overflow-hidden' : 'max-w-0 opacity-0 overflow-hidden group-hover:max-w-100px group-hover:opacity-100 group-hover:ml-8px'}`}
             style={{
               color: 'var(--text-primary)',
-              transition: selectedAgentKey === AGENT_TEAM_KEY
-                ? 'color 0.2s ease, font-weight 0.2s ease'
-                : isMobile
-                  ? 'none'
-                  : 'max-width 0.6s cubic-bezier(0.2, 0.8, 0.3, 1), opacity 0.5s cubic-bezier(0.2, 0.8, 0.3, 1) 0.05s, margin 0.6s cubic-bezier(0.2, 0.8, 0.3, 1)',
+              transition:
+                selectedAgentKey === AGENT_TEAM_KEY
+                  ? 'color 0.2s ease, font-weight 0.2s ease'
+                  : isMobile
+                    ? 'none'
+                    : 'max-width 0.6s cubic-bezier(0.2, 0.8, 0.3, 1), opacity 0.5s cubic-bezier(0.2, 0.8, 0.3, 1) 0.05s, margin 0.6s cubic-bezier(0.2, 0.8, 0.3, 1)',
             }}
           >
             Agent Team

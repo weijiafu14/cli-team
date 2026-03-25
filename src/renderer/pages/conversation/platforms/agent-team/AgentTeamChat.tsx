@@ -476,7 +476,10 @@ export default function AgentTeamChat({ conversation_id, workspace }: AgentTeamC
     [conversation_id, pendingFiles, memberList]
   );
 
-  const contextValue = useMemo(() => ({ conversationId: conversation_id, workspace, type: 'agent-team' as const }), [conversation_id, workspace]);
+  const contextValue = useMemo(
+    () => ({ conversationId: conversation_id, workspace, type: 'agent-team' as const }),
+    [conversation_id, workspace]
+  );
 
   return (
     <ConversationProvider value={contextValue}>
@@ -522,11 +525,7 @@ export default function AgentTeamChat({ conversation_id, workspace }: AgentTeamC
           >
             <TimelineList timeline={timeline} memberMap={memberMap} handleRichContentReady={handleRichContentReady} />
             {hasNewMessages && (
-              <button
-                type='button'
-                className={styles.newMessagesButton}
-                onClick={scrollTimelineToBottom}
-              >
+              <button type='button' className={styles.newMessagesButton} onClick={scrollTimelineToBottom}>
                 New messages ↓
               </button>
             )}

@@ -182,15 +182,18 @@ describe('AgentTeamChat recovery', () => {
             body: 'very long content',
           },
         ],
-      }
+      },
     });
 
     render(<AgentTeamChat conversation_id='team-1' />);
 
     // Fast-forward or wait for the observers/intervals to catch the height
-    await waitFor(() => {
-      expect(screen.getByText('Show more')).toBeInTheDocument();
-    }, { timeout: 1000 });
+    await waitFor(
+      () => {
+        expect(screen.getByText('Show more')).toBeInTheDocument();
+      },
+      { timeout: 1000 }
+    );
   });
 
   it('unescapes literal newlines in body before passing to MarkdownView', async () => {
@@ -208,7 +211,7 @@ describe('AgentTeamChat recovery', () => {
             body: 'line1\\nline2', // literal backslash-n
           },
         ],
-      }
+      },
     });
 
     render(<AgentTeamChat conversation_id='team-1' />);

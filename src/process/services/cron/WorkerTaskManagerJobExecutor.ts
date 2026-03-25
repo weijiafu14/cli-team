@@ -48,7 +48,7 @@ export class WorkerTaskManagerJobExecutor implements ICronJobExecutor {
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       if (message.includes('agent-team shell')) {
-        throw new Error('Cron jobs are not supported for Agent Team conversations yet');
+        throw new Error('Cron jobs are not supported for Agent Team conversations yet', { cause: error });
       }
       throw error;
     }

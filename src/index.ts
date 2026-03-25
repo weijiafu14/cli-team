@@ -63,7 +63,9 @@ const isE2ETestMode = process.env.AIONUI_E2E_TEST === '1';
 const isDevWebUiMode = !app.isPackaged && process.argv.includes('--webui');
 const deepLinkFromArgv = process.argv.find((arg) => arg.startsWith(`${PROTOCOL_SCHEME}://`));
 const shouldUseSingleInstanceLock = !isE2ETestMode && !isDevWebUiMode;
-const gotTheLock = shouldUseSingleInstanceLock ? app.requestSingleInstanceLock({ deepLinkUrl: deepLinkFromArgv }) : true;
+const gotTheLock = shouldUseSingleInstanceLock
+  ? app.requestSingleInstanceLock({ deepLinkUrl: deepLinkFromArgv })
+  : true;
 if (!gotTheLock) {
   console.warn('[AionUi] Another instance is already running; current process will exit.');
   app.quit();

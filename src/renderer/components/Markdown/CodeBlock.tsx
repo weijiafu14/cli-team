@@ -26,26 +26,41 @@ const MermaidBlock = ({ chart, theme }: { chart: string; theme: 'light' | 'dark'
     let isMounted = true;
     try {
       mermaid.initialize({ startOnLoad: false, theme: theme === 'dark' ? 'dark' : 'default' });
-      mermaid.render(mermaidId, chart).then((result) => {
-        if (isMounted) {
-          setSvgContent(result.svg);
-          setError('');
-        }
-      }).catch((e) => {
-        if (isMounted) {
-          setError(e.message || String(e));
-        }
-      });
+      mermaid
+        .render(mermaidId, chart)
+        .then((result) => {
+          if (isMounted) {
+            setSvgContent(result.svg);
+            setError('');
+          }
+        })
+        .catch((e) => {
+          if (isMounted) {
+            setError(e.message || String(e));
+          }
+        });
     } catch (e: any) {
       if (isMounted) {
         setError(e.message || String(e));
       }
     }
-    return () => { isMounted = false; };
+    return () => {
+      isMounted = false;
+    };
   }, [chart, theme, mermaidId]);
 
   return (
-    <div style={{ padding: '16px', background: 'var(--bg-1)', borderRadius: '8px', overflowX: 'auto', display: 'flex', justifyContent: 'center', border: '1px solid var(--bg-3)' }}>
+    <div
+      style={{
+        padding: '16px',
+        background: 'var(--bg-1)',
+        borderRadius: '8px',
+        overflowX: 'auto',
+        display: 'flex',
+        justifyContent: 'center',
+        border: '1px solid var(--bg-3)',
+      }}
+    >
       {error ? (
         <div style={{ color: 'var(--color-danger-6)', textAlign: 'left', width: '100%' }}>
           <div style={{ fontWeight: 'bold', marginBottom: '8px' }}>Mermaid Syntax Error:</div>

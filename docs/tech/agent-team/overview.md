@@ -73,16 +73,16 @@ agentTeam.timelineStream  → emitter for live timeline updates
 
 ## Key Files
 
-| File | Purpose |
-|------|---------|
-| `src/process/services/agentTeam/AgentTeamService.ts` | Team CRUD, sendMessage, workspace bootstrap |
-| `src/process/services/agentTeam/CoordDispatcher.ts` | Watch coord file, route messages to agents, busy gate, consensus enforcement |
-| `src/process/services/agentTeam/CoordFileWatcher.ts` | fs.watch + debounce + incremental byte-offset reading |
-| `src/process/services/agentTeam/types.ts` | ICoordTimelineEntry, ICreateAgentTeamInput, etc. |
-| `src/process/bridge/agentTeamBridge.ts` | IPC provider implementations |
-| `src/common/ipcBridge.ts` | IPC type definitions for agentTeam namespace |
-| `src/renderer/pages/conversation/platforms/agent-team/AgentTeamChat.tsx` | Team chat UI (timeline + agents view) |
-| `src/renderer/pages/guid/components/TeamBuilder.tsx` | Team creation UI |
+| File                                                                     | Purpose                                                                      |
+| ------------------------------------------------------------------------ | ---------------------------------------------------------------------------- |
+| `src/process/services/agentTeam/AgentTeamService.ts`                     | Team CRUD, sendMessage, workspace bootstrap                                  |
+| `src/process/services/agentTeam/CoordDispatcher.ts`                      | Watch coord file, route messages to agents, busy gate, consensus enforcement |
+| `src/process/services/agentTeam/CoordFileWatcher.ts`                     | fs.watch + debounce + incremental byte-offset reading                        |
+| `src/process/services/agentTeam/types.ts`                                | ICoordTimelineEntry, ICreateAgentTeamInput, etc.                             |
+| `src/process/bridge/agentTeamBridge.ts`                                  | IPC provider implementations                                                 |
+| `src/common/ipcBridge.ts`                                                | IPC type definitions for agentTeam namespace                                 |
+| `src/renderer/pages/conversation/platforms/agent-team/AgentTeamChat.tsx` | Team chat UI (timeline + agents view)                                        |
+| `src/renderer/pages/guid/components/TeamBuilder.tsx`                     | Team creation UI                                                             |
 
 ## Lifecycle
 
