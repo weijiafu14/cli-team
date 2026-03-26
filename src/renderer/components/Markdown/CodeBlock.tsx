@@ -11,15 +11,218 @@ import katex from 'katex';
 import mermaid from 'mermaid';
 
 import { copyText } from '@/renderer/utils/ui/clipboard';
-import { Message } from '@arco-design/web-react';
-import { Copy, Down, Up } from '@icon-park/react';
-import React, { useMemo, useState } from 'react';
+import { Button, Message } from '@arco-design/web-react';
+import { Copy, Down, FullScreen, OffScreen, Up } from '@icon-park/react';
+import React, { useCallback, useMemo, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
 import { formatCode, getDiffLineStyle, logicRender } from './markdownUtils';
 
+const DEFAULT_MERMAID_SCALE = 1.75;
+const MIN_MERMAID_SCALE = 0.5;
+const MAX_MERMAID_SCALE = 4;
+
+function clampMermaidScale(nextScale: number): number {
+  return Math.min(Math.max(nextScale, MIN_MERMAID_SCALE), MAX_MERMAID_SCALE);
+}
+
+function getErrorMessage(error: unknown): string {
+  if (error instanceof Error) {
+    return error.message;
+  }
+  return String(error);
+}
+
+function MermaidFullscreenOverlay({ svgContent, onClose }: { svgContent: string; onClose: () => void }) {
+  const { t } = useTranslation();
+  const [scale, setScale] = useState(DEFAULT_MERMAID_SCALE);
+  const [translate, setTranslate] = useState({ x: 0, y: 0 });
+  const isDragging = useRef(false);
+  const dragStart = useRef({ x: 0, y: 0 });
+  const containerRef = useRef<HTMLDivElement>(null);
+  const zoomLevel = `${Math.round(scale * 100)}%`;
+
+  const handleWheel = useCallback((e: React.WheelEvent) => {
+    e.stopPropagation();
+    const delta = e.deltaY > 0 ? -0.1 : 0.1;
+    setScale((prev) => clampMermaidScale(prev + delta));
+  }, []);
+
+  const handleMouseDown = useCallback(
+    (e: React.MouseEvent) => {
+      if (e.target === containerRef.current || containerRef.current?.contains(e.target as Node)) {
+        isDragging.current = true;
+        dragStart.current = { x: e.clientX - translate.x, y: e.clientY - translate.y };
+      }
+    },
+    [translate]
+  );
+
+  const handleMouseMove = useCallback((e: React.MouseEvent) => {
+    if (!isDragging.current) return;
+    setTranslate({
+      x: e.clientX - dragStart.current.x,
+      y: e.clientY - dragStart.current.y,
+    });
+  }, []);
+
+  const handleMouseUp = useCallback(() => {
+    isDragging.current = false;
+  }, []);
+
+  const resetView = useCallback(() => {
+    setScale(DEFAULT_MERMAID_SCALE);
+    setTranslate({ x: 0, y: 0 });
+  }, []);
+
+  React.useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose();
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [onClose]);
+
+  return createPortal(
+    <div
+      data-testid='mermaid-fullscreen-overlay'
+      role='dialog'
+      aria-modal='true'
+      aria-label={t('messages.mermaid.previewTitle')}
+      style={{
+        position: 'fixed',
+        inset: 0,
+        zIndex: 10000,
+        background: 'rgba(0, 0, 0, 0.75)',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        cursor: isDragging.current ? 'grabbing' : 'grab',
+      }}
+      onClick={(e) => {
+        if (e.target === e.currentTarget) onClose();
+      }}
+      onWheel={handleWheel}
+      onMouseDown={handleMouseDown}
+      onMouseMove={handleMouseMove}
+      onMouseUp={handleMouseUp}
+      onMouseLeave={handleMouseUp}
+    >
+      <div
+        style={{
+          position: 'absolute',
+          top: 16,
+          left: '50%',
+          transform: 'translateX(-50%)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          gap: 8,
+          zIndex: 10001,
+          width: 'min(96vw, 1200px)',
+          padding: '12px 16px',
+          borderRadius: 12,
+          border: '1px solid var(--bg-3)',
+          background: 'var(--bg-1)',
+          color: 'var(--text-primary)',
+          flexWrap: 'wrap',
+        }}
+        onClick={(e) => {
+          e.stopPropagation();
+        }}
+      >
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+          <span style={{ fontSize: 14, fontWeight: 600 }}>{t('messages.mermaid.previewTitle')}</span>
+          <span data-testid='mermaid-zoom-level' style={{ fontSize: 12, color: 'var(--text-secondary)' }}>
+            {zoomLevel}
+          </span>
+        </div>
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: 8,
+            flexWrap: 'wrap',
+          }}
+        >
+          <Button
+            size='small'
+            data-testid='mermaid-zoom-out-button'
+            aria-label={t('messages.mermaid.zoomOut')}
+            title={t('messages.mermaid.zoomOut')}
+            onClick={(e) => {
+              e.stopPropagation();
+              setScale((prev) => clampMermaidScale(prev - 0.25));
+            }}
+          >
+            -
+          </Button>
+          <Button
+            size='small'
+            data-testid='mermaid-zoom-in-button'
+            aria-label={t('messages.mermaid.zoomIn')}
+            title={t('messages.mermaid.zoomIn')}
+            onClick={(e) => {
+              e.stopPropagation();
+              setScale((prev) => clampMermaidScale(prev + 0.25));
+            }}
+          >
+            +
+          </Button>
+          <Button
+            size='small'
+            onClick={(e) => {
+              e.stopPropagation();
+              resetView();
+            }}
+          >
+            {t('messages.mermaid.resetZoom')}
+          </Button>
+          <Button
+            size='small'
+            data-testid='mermaid-close-button'
+            aria-label={t('common.close')}
+            title={t('common.close')}
+            onClick={(e) => {
+              e.stopPropagation();
+              onClose();
+            }}
+          >
+            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+              <OffScreen theme='outline' size='16' />
+              {t('common.close')}
+            </span>
+          </Button>
+        </div>
+      </div>
+
+      <div
+        ref={containerRef}
+        data-testid='mermaid-fullscreen-canvas'
+        style={{
+          transform: `translate(${translate.x}px, ${translate.y}px) scale(${scale})`,
+          transformOrigin: 'center center',
+          transition: isDragging.current ? 'none' : 'transform 0.1s ease-out',
+          background: 'var(--bg-1, #fff)',
+          borderRadius: 12,
+          padding: 24,
+          maxWidth: '90vw',
+          maxHeight: '90vh',
+          overflow: 'visible',
+          marginTop: 56,
+        }}
+        dangerouslySetInnerHTML={{ __html: svgContent }}
+      />
+    </div>,
+    document.body
+  );
+}
+
 const MermaidBlock = ({ chart, theme }: { chart: string; theme: 'light' | 'dark' }) => {
+  const { t } = useTranslation();
   const [svgContent, setSvgContent] = useState<string>('');
   const [error, setError] = useState<string>('');
+  const [fullscreen, setFullscreen] = useState(false);
   const mermaidId = useMemo(() => `mermaid-${Math.random().toString(36).substr(2, 9)}`, []);
 
   React.useEffect(() => {
@@ -34,14 +237,14 @@ const MermaidBlock = ({ chart, theme }: { chart: string; theme: 'light' | 'dark'
             setError('');
           }
         })
-        .catch((e) => {
+        .catch((error: unknown) => {
           if (isMounted) {
-            setError(e.message || String(e));
+            setError(getErrorMessage(error));
           }
         });
-    } catch (e: any) {
+    } catch (error: unknown) {
       if (isMounted) {
-        setError(e.message || String(e));
+        setError(getErrorMessage(error));
       }
     }
     return () => {
@@ -50,28 +253,70 @@ const MermaidBlock = ({ chart, theme }: { chart: string; theme: 'light' | 'dark'
   }, [chart, theme, mermaidId]);
 
   return (
-    <div
-      style={{
-        padding: '16px',
-        background: 'var(--bg-1)',
-        borderRadius: '8px',
-        overflowX: 'auto',
-        display: 'flex',
-        justifyContent: 'center',
-        border: '1px solid var(--bg-3)',
-      }}
-    >
-      {error ? (
-        <div style={{ color: 'var(--color-danger-6)', textAlign: 'left', width: '100%' }}>
-          <div style={{ fontWeight: 'bold', marginBottom: '8px' }}>Mermaid Syntax Error:</div>
-          <pre style={{ fontSize: '12px', whiteSpace: 'pre-wrap', wordBreak: 'break-all' }}>{error}</pre>
+    <>
+      <div
+        style={{
+          padding: '16px',
+          background: 'var(--bg-1)',
+          borderRadius: '8px',
+          overflowX: 'auto',
+          display: 'flex',
+          flexDirection: 'column',
+          gap: 12,
+          border: '1px solid var(--bg-3)',
+          zIndex: 10001,
+        }}
+      >
+        <div
+          style={{
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            gap: 12,
+            flexWrap: 'wrap',
+          }}
+        >
+          <span style={{ fontSize: 12, color: 'var(--text-secondary)', fontWeight: 500 }}>
+            {t('messages.mermaid.previewTitle')}
+          </span>
+          <Button
+            size='mini'
+            type='secondary'
+            data-testid='mermaid-expand-button'
+            disabled={!svgContent}
+            onClick={() => setFullscreen(true)}
+          >
+            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+              <FullScreen theme='outline' size='14' />
+              {t('messages.mermaid.expand')}
+            </span>
+          </Button>
         </div>
-      ) : svgContent ? (
-        <div dangerouslySetInnerHTML={{ __html: svgContent }} />
-      ) : (
-        <div style={{ color: 'var(--text-3)' }}>Rendering diagram...</div>
+        <div
+          style={{
+            overflowX: 'auto',
+            display: 'flex',
+            justifyContent: 'center',
+            borderRadius: '8px',
+            position: 'relative',
+          }}
+        >
+          {error ? (
+            <div style={{ color: 'var(--color-danger-6)', textAlign: 'left', width: '100%' }}>
+              <div style={{ fontWeight: 'bold', marginBottom: '8px' }}>{t('messages.mermaid.syntaxErrorTitle')}</div>
+              <pre style={{ fontSize: '12px', whiteSpace: 'pre-wrap', wordBreak: 'break-all' }}>{error}</pre>
+            </div>
+          ) : svgContent ? (
+            <div dangerouslySetInnerHTML={{ __html: svgContent }} />
+          ) : (
+            <div style={{ color: 'var(--text-3)' }}>{t('messages.mermaid.rendering')}</div>
+          )}
+        </div>
+      </div>
+      {fullscreen && svgContent && (
+        <MermaidFullscreenOverlay svgContent={svgContent} onClose={() => setFullscreen(false)} />
       )}
-    </div>
+    </>
   );
 };
 
