@@ -131,6 +131,36 @@ describe('useAutoScroll - scroll to bottom on message send (#977)', () => {
     );
   });
 
+  it('should scroll on first mount when messages are already preloaded and an initial target is requested', async () => {
+    const preloadedMessages: TMessage[] = [createMessage('left', '1'), createMessage('right', '2')];
+
+    const { result } = renderHook(
+      ({ messages, itemCount, initialScrollTargetIndex }) =>
+        useAutoScroll({ messages, itemCount, initialScrollTargetIndex }),
+      {
+        initialProps: {
+          messages: preloadedMessages,
+          itemCount: 2,
+          initialScrollTargetIndex: 'LAST' as const,
+        },
+      }
+    );
+
+    (result.current.virtuosoRef as any).current = mockVirtuosoHandle;
+
+    await act(async () => {
+      vi.runAllTimers();
+    });
+
+    expect(mockVirtuosoHandle.scrollToIndex).toHaveBeenCalledWith(
+      expect.objectContaining({
+        index: 'LAST',
+        behavior: 'auto',
+        align: 'end',
+      })
+    );
+  });
+
   it('should scroll to the latest right-side message on initial load when a specific index is provided', async () => {
     const { result, rerender } = renderHook(
       ({ messages, itemCount, initialScrollTargetIndex }) =>

@@ -47,6 +47,26 @@ function createTextMessage(id: string, msgId: string, content: string): TMessage
   };
 }
 
+function createAcpToolCallMessage(id: string, msgId: string, status: 'pending' | 'completed'): TMessage {
+  return {
+    id,
+    msg_id: msgId,
+    conversation_id: 'conv-1',
+    type: 'acp_tool_call',
+    position: 'left',
+    content: {
+      sessionId: 'session-1',
+      update: {
+        sessionUpdate: 'tool_call',
+        toolCallId: msgId,
+        title: 'exec_command',
+        status,
+      },
+    },
+    createdAt: Date.now(),
+  } as TMessage;
+}
+
 describe('useMessageLstCache', () => {
   const flushMicrotasks = async () => {
     await Promise.resolve();
@@ -88,5 +108,27 @@ describe('useMessageLstCache', () => {
       pageSize: 10000,
       order: 'DESC',
     });
+  });
+
+  it('deduplicates database snapshots that share the same message identity before hydrating the list', async () => {
+    const descendingSnapshot = [
+      createAcpToolCallMessage('db-row-latest', 'tool-1', 'completed'),
+      createAcpToolCallMessage('db-row-older', 'tool-1', 'pending'),
+    ];
+
+    mocks.getConversationMessagesMock.mockResolvedValueOnce(descendingSnapshot);
+
+    render(
+      <MessageListProvider>
+        <CacheProbe conversationId='conv-1' />
+      </MessageListProvider>
+    );
+
+    await act(async () => {
+      await flushMicrotasks();
+    });
+
+    expect(screen.getByTestId('message-count')).toHaveTextContent('1');
+    expect(screen.getByTestId('message-order')).toHaveTextContent('tool-1');
   });
 });
