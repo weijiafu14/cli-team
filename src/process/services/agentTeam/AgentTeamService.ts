@@ -81,6 +81,7 @@ You are part of an Agent Team. Follow these rules strictly.
 - Publish a \`design\` document before \`done\`.
 - If \`/consensus\` is active, you MUST explicitly \`ack\` the final decision with \`--reply-to <decision-message-id>\` before ending.
 - Every \`coord_write.py\` call MUST include \`--summary\`, even when you also pass \`--body\` or \`--body-file\`.
+- When writing coord timeline content the user may read (\`summary\`, \`body\`, attached design notes), use the user's language unless literal code, paths, or identifiers must stay unchanged.
 
 ## Message Types
 \`claim\`, \`intent\`, \`update\`, \`question\`, \`challenge\`, \`finding\`, \`design\`, \`decision\`, \`conclusion\`, \`ack\`, \`done\`
@@ -132,6 +133,7 @@ Coordination rules:
 - If content is long, write it through --body-file so it becomes an attachment.
 - Before done, publish a design document and attach it.
 - If /consensus is active, you MUST explicitly ack the final decision with --reply-to <decision-message-id> before ending.
+- When writing coord messages the user may read (especially summary/body in messages.jsonl), use the user's language unless code, paths, or identifiers must stay literal.
 - Read ${cd}/TEAM.md for team members and ${cd}/protocol.md for full protocol.`;
 }
 
@@ -377,7 +379,9 @@ export class AgentTeamService {
                 .map((member) => member.conversationId)
             : team.members.map((member) => member.conversationId);
 
-        await Promise.all(targetConversationIds.map((targetConversationId) => this.stopAndKillTask(targetConversationId)));
+        await Promise.all(
+          targetConversationIds.map((targetConversationId) => this.stopAndKillTask(targetConversationId))
+        );
       }
     }
 
@@ -732,6 +736,7 @@ Agents must not ignore user guidance, and must not flatter the user instead of d
 6. Development work is claim-based. Before starting implementation work, the agent should write \`intent\` or \`claim\`, and acquire a lock when the work is mutually exclusive.
 7. After finishing development work, the agent must publish a design document and attach it in the coordination stream before marking the work as complete.
 8. If the user says the team must reach consensus, no agent may stop at a private judgment. The team must continue until explicit ACK messages are exchanged on the same final decision.
+9. When agents write coord entries the user may read (especially \`summary\`, \`body\`, and attached design notes), they MUST use the user's language unless code, paths, or identifiers need to remain literal.
 
 ## Required Fields
 
@@ -1096,6 +1101,16 @@ def manage_lock(locks_dir: Path, agent_id: str, key: str, action: str, summary: 
     raise ValueError(f"Unknown lock action: {action}")
 
 
+def normalize_dispatch(msg_type: str, dispatch: str, to_list: list[str]) -> tuple[str, list[str]]:
+    if msg_type == "ack":
+        return "none", ["user"]
+    if msg_type in {"claim", "intent", "update", "done"} and dispatch == "all" and to_list == ["*"]:
+        return "none", ["user"]
+    if dispatch == "none" and to_list == ["*"]:
+        return "none", ["user"]
+    return dispatch, to_list
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description="Write a coordination message with optional attachment and lock handling.")
     parser.add_argument("--agent-id", required=True)
@@ -1128,11 +1143,23 @@ def main() -> int:
         attachment = write_attachment(Path(args.attachments_dir), msg_id, body, args.body_file)
         inline_body = body[: args.max_inline_chars].rstrip() + "..."
 
-    lock_info = manage_lock(Path(args.locks_dir), args.agent_id, args.lock_key, args.lock_action, args.summary, args.force_lock) if args.lock_key else {}
+    # Auto-lock enforcement: claim auto-acquires a task lock, done auto-releases it
+    lock_key = args.lock_key
+    lock_action = args.lock_action
+    if not lock_key and args.task_id:
+        if args.type == "claim":
+            lock_key = f"task-{args.task_id}"
+            lock_action = "acquire"
+        elif args.type == "done":
+            lock_path = Path(args.locks_dir) / f"task-{args.task_id}.json"
+            if lock_path.exists():
+                lock_key = f"task-{args.task_id}"
+                lock_action = "release"
+
+    lock_info = manage_lock(Path(args.locks_dir), args.agent_id, lock_key, lock_action, args.summary, args.force_lock) if lock_key else {}
 
     to_list = [item.strip() for item in args.to.split(",") if item.strip()] or ["*"]
-    if args.dispatch == "none" and to_list == ["*"]:
-        to_list = ["user"]
+    dispatch, to_list = normalize_dispatch(args.type, args.dispatch, to_list)
 
     msg = {
         "id": msg_id,
@@ -1144,7 +1171,7 @@ def main() -> int:
         "task_id": args.task_id,
         "type": args.type,
         "summary": args.summary,
-        "dispatch": args.dispatch,
+        "dispatch": dispatch,
     }
     if inline_body:
         msg["body"] = inline_body

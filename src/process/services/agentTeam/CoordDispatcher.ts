@@ -8,6 +8,7 @@ import { v4 as uuid } from 'uuid';
 import type { IAgentTeamMember } from '@/common/storage';
 import type { AgentTeamDispatchPolicy } from '@/common/storage';
 import { getDatabase } from '@process/database';
+import { getAutoCompactionOrchestrator } from '@process/services/autoCompaction';
 import type { IWorkerTaskManager } from '@process/task/IWorkerTaskManager';
 import { CoordFileWatcher } from './CoordFileWatcher';
 import type { ICoordTimelineEntry } from './types';
@@ -68,6 +69,7 @@ export function buildCoordWakeupMessage({ relCoordDir, memberId, messages }: Wak
     `Read now: python3 ${relCoordDir}/scripts/coord_read.py --messages ${relCoordDir}/messages.jsonl --state-dir ${relCoordDir}/state --agent-id ${memberId}`,
     `Source of truth: ${relCoordDir}/TEAM.md, ${relCoordDir}/protocol.md`,
     'Write back via coord_write.py with --summary.',
+    "Write coord summary/body in the user's language so the user can read messages.jsonl directly.",
     'If /consensus is active, ACK the final decision with --reply-to <decision-id>.',
     `Unread: ${messages.length}`,
     topics.length > 0 ? `Topics: ${topics.join(', ')}` : '',
@@ -337,8 +339,6 @@ export class CoordDispatcher {
 
     // Check if this member's session is poisoned and needs a fresh start
     try {
-      const { getAutoCompactionOrchestrator } =
-        require('@process/services/autoCompaction') as typeof import('@process/services/autoCompaction');
       const orchestrator = getAutoCompactionOrchestrator();
       if (orchestrator.isSessionPoisoned(state.member.conversationId)) {
         console.log(`[CoordDispatcher] Session poisoned for ${state.member.name}, resetting before dispatch`);
@@ -362,14 +362,13 @@ export class CoordDispatcher {
         content: coordText,
         msg_id: uuid(),
         files: msg.files || [],
+        internal: true,
       });
     } catch (err) {
       console.error(`[CoordDispatcher] Failed to dispatch to ${state.member.name}:`, err);
 
       // Track consecutive errors for session health monitoring
       try {
-        const { getAutoCompactionOrchestrator } =
-          require('@process/services/autoCompaction') as typeof import('@process/services/autoCompaction');
         const errorMsg = err instanceof Error ? err.message : String(err);
         getAutoCompactionOrchestrator().reportError(state.member.conversationId, errorMsg);
       } catch {
@@ -394,11 +393,7 @@ export class CoordDispatcher {
 
       const conversation = result.data;
       const existingExtra = (conversation.extra || {}) as Record<string, unknown>;
-      const {
-        acpSessionId: _acpSessionId,
-        acpSessionUpdatedAt: _acpSessionUpdatedAt,
-        ...restExtra
-      } = existingExtra;
+      const { acpSessionId: _acpSessionId, acpSessionUpdatedAt: _acpSessionUpdatedAt, ...restExtra } = existingExtra;
 
       getDatabase().updateConversation(member.conversationId, {
         extra: restExtra,
