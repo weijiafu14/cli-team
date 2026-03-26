@@ -1,3 +1,5 @@
+import { AutoCompactionOrchestrator } from './AutoCompactionOrchestrator';
+
 export { AutoCompactionOrchestrator } from './AutoCompactionOrchestrator';
 export { downscaleImageIfNeeded } from './imageDownscaler';
 export type {
@@ -11,18 +13,14 @@ export type {
 export { DEFAULT_THRESHOLDS, DEFAULT_MAX_IMAGE_DIMENSION, COMPACT_DEBOUNCE_MS } from './types';
 
 /** Global singleton instance */
-let _orchestrator: InstanceType<typeof import('./AutoCompactionOrchestrator').AutoCompactionOrchestrator> | null = null;
+let _orchestrator: AutoCompactionOrchestrator | null = null;
 
 /**
  * Get the global AutoCompactionOrchestrator singleton.
  * Created on first access.
  */
-export function getAutoCompactionOrchestrator(): InstanceType<
-  typeof import('./AutoCompactionOrchestrator').AutoCompactionOrchestrator
-> {
+export function getAutoCompactionOrchestrator(): AutoCompactionOrchestrator {
   if (!_orchestrator) {
-    const { AutoCompactionOrchestrator } =
-      require('./AutoCompactionOrchestrator') as typeof import('./AutoCompactionOrchestrator');
     _orchestrator = new AutoCompactionOrchestrator();
   }
   return _orchestrator;

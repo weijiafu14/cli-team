@@ -20,9 +20,7 @@ vi.mock('sharp', () => ({
 }));
 
 // Import after mocks
-const { downscaleImageIfNeeded } = await import(
-  '@process/services/autoCompaction/imageDownscaler'
-);
+const { downscaleImageIfNeeded } = await import('@process/services/autoCompaction/imageDownscaler');
 
 describe('downscaleImageIfNeeded', () => {
   beforeEach(() => {
