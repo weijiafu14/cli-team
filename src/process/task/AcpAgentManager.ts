@@ -17,6 +17,7 @@ import type {
 import { ACP_BACKENDS_ALL } from '@/types/acpTypes';
 import { ExtensionRegistry } from '@/extensions';
 import { getDatabase } from '@process/database';
+import { downscaleImageIfNeeded, getAutoCompactionOrchestrator } from '@process/services/autoCompaction';
 import { ProcessConfig } from '../initStorage';
 import { addMessage, addOrUpdateMessage, nextTickToLocalFinish } from '../message';
 import { handlePreviewOpenEvent } from '../utils/previewUtils';
@@ -340,12 +341,13 @@ class AcpAgentManager extends BaseAgentManager<AcpAgentManagerData, AcpPermissio
           if (message.type === 'acp_stderr_critical') {
             const stderrData = message.data as { message: string };
             try {
-              const { getAutoCompactionOrchestrator } =
-                require('@process/services/autoCompaction') as typeof import('@process/services/autoCompaction');
               getAutoCompactionOrchestrator().reportError(data.conversation_id, stderrData.message);
             } catch {
               // autoCompaction not loaded — skip
             }
+            // Immediately clear persisted acpSessionId so the next bootstrap
+            // does not resume the broken/full context window thread
+            this.clearAcpSessionId();
             return;
           }
 
@@ -356,8 +358,6 @@ class AcpAgentManager extends BaseAgentManager<AcpAgentManagerData, AcpPermissio
 
             // Forward to AutoCompactionOrchestrator for threshold monitoring
             if (usageData.used > 0 && usageData.size > 0) {
-              const { getAutoCompactionOrchestrator } =
-                require('@process/services/autoCompaction') as typeof import('@process/services/autoCompaction');
               const orchestrator = getAutoCompactionOrchestrator();
 
               // Register per-conversation compact/rollover actions (bound to this agent instance)
@@ -496,8 +496,6 @@ class AcpAgentManager extends BaseAgentManager<AcpAgentManagerData, AcpPermissio
 
             // Report success to clear session health error tracking
             try {
-              const { getAutoCompactionOrchestrator } =
-                require('@process/services/autoCompaction') as typeof import('@process/services/autoCompaction');
               getAutoCompactionOrchestrator().reportSuccess(data.conversation_id);
             } catch {
               // autoCompaction not loaded yet — skip
@@ -605,7 +603,13 @@ class AcpAgentManager extends BaseAgentManager<AcpAgentManagerData, AcpPermissio
     return this.bootstrap;
   }
 
-  async sendMessage(data: { content: string; files?: string[]; msg_id?: string; cronMeta?: CronMessageMeta }): Promise<{
+  async sendMessage(data: {
+    content: string;
+    files?: string[];
+    msg_id?: string;
+    cronMeta?: CronMessageMeta;
+    internal?: boolean;
+  }): Promise<{
     success: boolean;
     msg?: string;
     message?: string;
@@ -618,7 +622,7 @@ class AcpAgentManager extends BaseAgentManager<AcpAgentManagerData, AcpPermissio
     try {
       // Emit/persist user message immediately so UI can refresh without waiting
       // for ACP connection/auth/session initialization.
-      if (data.msg_id && data.content) {
+      if (!data.internal && data.msg_id && data.content) {
         const userMessage: TMessage = {
           id: data.msg_id,
           msg_id: data.msg_id,
@@ -655,8 +659,6 @@ class AcpAgentManager extends BaseAgentManager<AcpAgentManagerData, AcpPermissio
 
       // Downscale oversized images before sending to prevent dimension limit errors
       if (data.files && data.files.length > 0) {
-        const { downscaleImageIfNeeded } =
-          require('@process/services/autoCompaction') as typeof import('@process/services/autoCompaction');
         data.files = await Promise.all(data.files.map((f) => downscaleImageIfNeeded(f)));
       }
 
@@ -703,8 +705,6 @@ class AcpAgentManager extends BaseAgentManager<AcpAgentManagerData, AcpPermissio
       // Report error to AutoCompactionOrchestrator for session health tracking
       try {
         const errorMsg = e instanceof Error ? e.message : String(e);
-        const { getAutoCompactionOrchestrator } =
-          require('@process/services/autoCompaction') as typeof import('@process/services/autoCompaction');
         getAutoCompactionOrchestrator().reportError(this.conversation_id, errorMsg);
       } catch {
         // autoCompaction not loaded yet — skip
@@ -1178,6 +1178,22 @@ class AcpAgentManager extends BaseAgentManager<AcpAgentManagerData, AcpPermissio
    * Save ACP session ID to database for resume support.
    * 保存 ACP session ID 到数据库以支持会话恢复。
    */
+  private clearAcpSessionId(): void {
+    try {
+      const db = getDatabase();
+      const result = db.getConversation(this.conversation_id);
+      if (result.success && result.data && result.data.type === 'acp') {
+        const conversation = result.data;
+        const existingExtra = (conversation.extra || {}) as Record<string, unknown>;
+        const { acpSessionId: _removed1, acpSessionUpdatedAt: _removed2, ...restExtra } = existingExtra;
+        db.updateConversation(this.conversation_id, { extra: restExtra } as Partial<typeof conversation>);
+        console.log(`[AcpAgentManager] Cleared stale acpSessionId for poisoned conversation: ${this.conversation_id}`);
+      }
+    } catch (error) {
+      console.warn('[AcpAgentManager] Failed to clear acpSessionId:', error);
+    }
+  }
+
   private saveAcpSessionId(sessionId: string): void {
     try {
       const db = getDatabase();

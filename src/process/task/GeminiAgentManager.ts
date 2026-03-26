@@ -20,6 +20,7 @@ import { AuthType, getOauthInfoWithCache, Storage } from '@office-ai/aioncli-cor
 import { GeminiApprovalStore } from '../../agent/gemini/GeminiApprovalStore';
 import { ToolConfirmationOutcome } from '../../agent/gemini/cli/tools/tools';
 import { getDatabase } from '@process/database';
+import { getAutoCompactionOrchestrator } from '@process/services/autoCompaction';
 import { addMessage, addOrUpdateMessage, nextTickToLocalFinish } from '../message';
 import { cronBusyGuard } from '@process/services/cron/CronBusyGuard';
 import { handlePreviewOpenEvent } from '../utils/previewUtils';
@@ -674,8 +675,6 @@ export class GeminiAgentManager extends BaseAgentManager<
         const used = overflowData.estimatedRequestTokenCount;
         const limit = used + overflowData.remainingTokenCount;
         if (used > 0 && limit > 0) {
-          const { getAutoCompactionOrchestrator } =
-            require('@process/services/autoCompaction') as typeof import('@process/services/autoCompaction');
           const orchestrator = getAutoCompactionOrchestrator();
 
           // Register per-conversation compact/rollover actions
