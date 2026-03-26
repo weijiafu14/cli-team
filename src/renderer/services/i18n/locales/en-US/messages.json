@@ -28,6 +28,15 @@
   "noOptionsAvailable": "No options available",
   "processing": "Processing...",
   "responseSentSuccessfully": "Response sent successfully",
+  "mermaid": {
+    "previewTitle": "Mermaid Diagram",
+    "expand": "Open large view",
+    "zoomIn": "Zoom in",
+    "zoomOut": "Zoom out",
+    "resetZoom": "Reset zoom",
+    "rendering": "Rendering diagram...",
+    "syntaxErrorTitle": "Mermaid Syntax Error:"
+  },
   "confirmation": {
     "applyChange": "Apply this change?",
     "allowExecution": "Allow execution?",

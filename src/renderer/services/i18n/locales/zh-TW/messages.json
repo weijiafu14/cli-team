@@ -28,6 +28,15 @@
   "noOptionsAvailable": "沒有可用選項",
   "processing": "處理中...",
   "responseSentSuccessfully": "回覆已成功送出",
+  "mermaid": {
+    "previewTitle": "Mermaid 圖表",
+    "expand": "放大檢視",
+    "zoomIn": "放大",
+    "zoomOut": "縮小",
+    "resetZoom": "重設縮放",
+    "rendering": "正在渲染圖表...",
+    "syntaxErrorTitle": "Mermaid 語法錯誤："
+  },
   "confirmation": {
     "applyChange": "應用此更改？",
     "allowExecution": "允許執行？",

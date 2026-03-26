@@ -28,6 +28,15 @@
   "noOptionsAvailable": "利用可能なオプションはありません",
   "processing": "Processing...",
   "responseSentSuccessfully": "応答が正常に送信されました",
+  "mermaid": {
+    "previewTitle": "Mermaid 図",
+    "expand": "拡大表示",
+    "zoomIn": "拡大",
+    "zoomOut": "縮小",
+    "resetZoom": "ズームをリセット",
+    "rendering": "図を描画しています...",
+    "syntaxErrorTitle": "Mermaid 構文エラー:"
+  },
   "confirmation": {
     "applyChange": "この変更を適用しますか？",
     "allowExecution": "実行を許可しますか？",

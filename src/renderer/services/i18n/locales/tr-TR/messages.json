@@ -28,6 +28,15 @@
   "noOptionsAvailable": "Seçenek yok",
   "processing": "İşleniyor...",
   "responseSentSuccessfully": "Yanıt başarıyla gönderildi",
+  "mermaid": {
+    "previewTitle": "Mermaid Diyagramı",
+    "expand": "Büyük görünüm aç",
+    "zoomIn": "Yakınlaştır",
+    "zoomOut": "Uzaklaştır",
+    "resetZoom": "Yakınlaştırmayı sıfırla",
+    "rendering": "Diyagram işleniyor...",
+    "syntaxErrorTitle": "Mermaid Sözdizimi Hatası:"
+  },
   "confirmation": {
     "applyChange": "Bu değişikliği uygula?",
     "allowExecution": "Yürütmeye izin ver?",
