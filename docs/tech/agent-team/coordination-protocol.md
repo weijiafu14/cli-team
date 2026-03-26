@@ -44,6 +44,8 @@ Each line in `messages.jsonl` is a JSON object:
 | `system`     | Protocol-level notices                                                              |
 | `direction`  | User-provided guidance                                                              |
 
+When agents write coord entries the user may read, especially `summary`, `body`, and attached design notes, they must use the user's language unless code, paths, or identifiers need to remain literal.
+
 ## Knowledge Sedimentation
 
 The workspace `docs/tech/agent-team/` is the team's canonical memory. It contains:
