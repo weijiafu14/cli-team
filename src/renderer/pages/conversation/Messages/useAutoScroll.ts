@@ -116,9 +116,7 @@ export function useAutoScroll({
     const isInitialLoad = initialScrollTargetIndex !== undefined && prevLength === 0 && currentListLength > 0;
     // Handle first mount with preloaded messages (e.g., cached DB data available immediately)
     const isFirstMountWithPreload =
-      initialScrollTargetIndex !== undefined &&
-      !hasScrolledInitialRef.current &&
-      currentListLength > 0;
+      initialScrollTargetIndex !== undefined && !hasScrolledInitialRef.current && currentListLength > 0;
 
     previousListLengthRef.current = currentListLength;
 
