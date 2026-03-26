@@ -106,6 +106,9 @@ export interface Settings {
   // A map of tool names to their summarization settings.
   summarizeToolOutput?: Record<string, SummarizeToolOutputSettings>;
 
+  /** Shell tool inactivity timeout in seconds. */
+  shellToolInactivityTimeout?: number;
+
   vimMode?: boolean;
   memoryImportFormat?: 'tree' | 'flat';
 
