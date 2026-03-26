@@ -1,4 +1,18 @@
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { getAutoCompactionOrchestrator } from '../../src/process/services/autoCompaction';
+
+const mockDbRefs = vi.hoisted(() => ({
+  getConversation: vi.fn(),
+  updateConversation: vi.fn(),
+}));
+
+vi.mock('@process/database', () => ({
+  getDatabase: () => ({
+    getConversation: mockDbRefs.getConversation,
+    updateConversation: mockDbRefs.updateConversation,
+  }),
+}));
+
 import {
   buildCoordWakeupMessage,
   CoordDispatcher,
@@ -363,6 +377,16 @@ describe('evaluateConsensusProgress', () => {
 });
 
 describe('CoordDispatcher interruptMembers', () => {
+  beforeEach(() => {
+    mockDbRefs.getConversation.mockReset();
+    mockDbRefs.updateConversation.mockReset();
+    getAutoCompactionOrchestrator().reset();
+  });
+
+  afterEach(() => {
+    getAutoCompactionOrchestrator().reset();
+  });
+
   it('kills and clears only the targeted member state', async () => {
     const members = [
       createMember(),
@@ -479,5 +503,73 @@ describe('CoordDispatcher interruptMembers', () => {
     await interruptPromise;
 
     expect(workerTaskManager.kill).toHaveBeenCalledWith('conv-codex');
+  });
+
+  it('clears persisted acpSessionId for poisoned Codex-over-ACP conversations before redispatch', async () => {
+    const sendMessage = vi.fn().mockResolvedValue(undefined);
+    const workerTaskManager = {
+      getTask: vi.fn(() => ({
+        stop: vi.fn().mockResolvedValue(undefined),
+      })),
+      kill: vi.fn(),
+      getOrBuildTask: vi.fn().mockResolvedValue({
+        sendMessage,
+      }),
+    } as unknown as IWorkerTaskManager;
+
+    mockDbRefs.getConversation.mockReturnValue({
+      success: true,
+      data: {
+        id: 'conv-codex',
+        type: 'acp',
+        extra: {
+          acpSessionId: 'poisoned-thread',
+          acpSessionUpdatedAt: 123,
+          foo: 'bar',
+        },
+      },
+    });
+
+    const dispatcher = new CoordDispatcher(
+      '/tmp/coord',
+      [
+        createMember({
+          backend: 'codex',
+          type: 'acp',
+        }),
+      ],
+      workerTaskManager,
+      'user-priority',
+    ) as DispatcherWithInternals;
+
+    const orchestrator = getAutoCompactionOrchestrator();
+    orchestrator.reportError('conv-codex', 'ContextWindowExceeded: old full thread');
+    expect(orchestrator.isSessionPoisoned('conv-codex')).toBe(true);
+
+    const codexState = dispatcher.memberStates.get('conv-codex');
+    if (!codexState) {
+      throw new Error('Expected Codex member state to exist');
+    }
+
+    await (dispatcher as any).dispatchToMember(
+      codexState,
+      createEntry({
+        id: 'user-msg',
+        topic: 'a0f736de',
+        task_id: 'a0f736de',
+      }),
+    );
+
+    expect(mockDbRefs.updateConversation).toHaveBeenCalledWith(
+      'conv-codex',
+      expect.objectContaining({
+        extra: {
+          foo: 'bar',
+        },
+      }),
+    );
+    expect(workerTaskManager.kill).toHaveBeenCalledWith('conv-codex');
+    expect(sendMessage).toHaveBeenCalled();
+    expect(orchestrator.isSessionPoisoned('conv-codex')).toBe(false);
   });
 });

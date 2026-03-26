@@ -82,6 +82,8 @@ export class AcpConnection {
     () => {};
   // Disconnect callback - called when child process exits unexpectedly during runtime
   public onDisconnect: (error: { code: number | null; signal: NodeJS.Signals | null }) => void = () => {};
+  // Stderr critical error callback - called when stderr contains context window or fatal patterns
+  public onStderrCritical: (message: string) => void = () => {};
 
   // Track if initial setup is complete (to distinguish startup errors from runtime exits)
   private isSetupComplete = false;
@@ -293,6 +295,10 @@ export class AcpConnection {
       stderrTail += chunk;
       if (stderrTail.length > STDERR_TAIL_MAX) {
         stderrTail = stderrTail.slice(-STDERR_TAIL_MAX);
+      }
+      // Detect critical context window errors in stderr for auto-compaction
+      if (/ContextWindowExceeded|ran out of room in the model.?s context window/i.test(chunk)) {
+        this.onStderrCritical(chunk);
       }
     });
 

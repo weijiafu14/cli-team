@@ -336,6 +336,19 @@ class AcpAgentManager extends BaseAgentManager<AcpAgentManagerData, AcpPermissio
             });
           }
 
+          // Handle critical stderr errors (e.g., ContextWindowExceeded from Codex-over-ACP)
+          if (message.type === 'acp_stderr_critical') {
+            const stderrData = message.data as { message: string };
+            try {
+              const { getAutoCompactionOrchestrator } =
+                require('@process/services/autoCompaction') as typeof import('@process/services/autoCompaction');
+              getAutoCompactionOrchestrator().reportError(data.conversation_id, stderrData.message);
+            } catch {
+              // autoCompaction not loaded — skip
+            }
+            return;
+          }
+
           // Persist context usage to conversation extra for restore on page switch
           if (message.type === 'acp_context_usage') {
             const usageData = message.data as { used: number; size: number };

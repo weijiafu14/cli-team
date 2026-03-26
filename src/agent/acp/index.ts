@@ -245,6 +245,17 @@ export class AcpAgent {
     this.connection.onDisconnect = (error) => {
       this.handleDisconnect(error);
     };
+
+    this.connection.onStderrCritical = (message) => {
+      // Forward critical stderr errors (e.g., ContextWindowExceeded) as stream events
+      // so AcpAgentManager can report them to AutoCompactionOrchestrator
+      this.onStreamEvent({
+        type: 'acp_stderr_critical',
+        conversation_id: this.id,
+        msg_id: uuid(),
+        data: { message },
+      });
+    };
   }
 
   /**
