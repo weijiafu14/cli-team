@@ -28,6 +28,15 @@
   "noOptionsAvailable": "사용 가능한 옵션 없음",
   "processing": "처리 중...",
   "responseSentSuccessfully": "응답 전송 성공",
+  "mermaid": {
+    "previewTitle": "Mermaid 다이어그램",
+    "expand": "크게 보기",
+    "zoomIn": "확대",
+    "zoomOut": "축소",
+    "resetZoom": "확대 비율 초기화",
+    "rendering": "다이어그램 렌더링 중...",
+    "syntaxErrorTitle": "Mermaid 문법 오류:"
+  },
   "confirmation": {
     "applyChange": "이 변경 사항을 적용하시겠습니까?",
     "allowExecution": "실행을 허용하시겠습니까?",

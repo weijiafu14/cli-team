@@ -45,7 +45,7 @@ function extractTypeUnionValues(content, typeName) {
   }
 
   const values = [];
-  const valueRegex = /'([^']+)'/g;
+  const valueRegex = /["']([^"']+)["']/g;
   for (const item of match[1].matchAll(valueRegex)) {
     values.push(item[1]);
   }
