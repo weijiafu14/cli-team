@@ -136,20 +136,30 @@ export function useAutoScroll({
     // meaningful initial target (e.g. latest right-side wakeup message).
     if (lastMessage?.position === 'right' || isInitialLoad || isFirstMountWithPreload) {
       userScrolledRef.current = false;
-      // Use double RAF to ensure DOM is updated before scrolling (#977)
-      // 使用双 RAF 确保 DOM 更新后再滚动
-      requestAnimationFrame(() => {
+      const targetIndex = isInitialLoad || isFirstMountWithPreload ? initialScrollTargetIndex! : 'LAST';
+      const doScroll = () => {
+        if (virtuosoRef.current) {
+          lastProgrammaticScrollTimeRef.current = Date.now();
+          virtuosoRef.current.scrollToIndex({
+            index: targetIndex,
+            behavior: 'auto',
+            align: 'end',
+          });
+        }
+      };
+      if (isFirstMountWithPreload || isInitialLoad) {
+        // For initial load, scroll multiple times with increasing delays
+        // to handle large lists where Virtuoso needs time to stabilize
+        setTimeout(doScroll, 100);
+        setTimeout(doScroll, 500);
+        setTimeout(doScroll, 1500);
+        setTimeout(doScroll, 3000);
+      } else {
+        // For streaming messages, double RAF is sufficient (#977)
         requestAnimationFrame(() => {
-          if (virtuosoRef.current) {
-            lastProgrammaticScrollTimeRef.current = Date.now();
-            virtuosoRef.current.scrollToIndex({
-              index: isInitialLoad || isFirstMountWithPreload ? initialScrollTargetIndex! : 'LAST',
-              behavior: 'auto',
-              align: 'end',
-            });
-          }
+          requestAnimationFrame(doScroll);
         });
-      });
+      }
     }
   }, [messages]);
 

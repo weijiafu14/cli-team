@@ -253,6 +253,7 @@ const MessageList: React.FC<{ className?: string; initialScrollTargetOnLoad?: 'b
     return 'LAST' as const;
   }, [initialScrollTargetOnLoad, processedList]);
 
+
   // Use auto-scroll hook
   const {
     virtuosoRef,
@@ -371,6 +372,13 @@ const MessageList: React.FC<{ className?: string; initialScrollTargetOnLoad?: 'b
             ref={virtuosoRef}
             className='flex-1 h-full pb-10px box-border'
             data={processedList}
+            initialTopMostItemIndex={
+              processedList.length > 0 && initialScrollTargetIndex !== undefined
+                ? initialScrollTargetIndex === 'LAST'
+                  ? processedList.length - 1
+                  : initialScrollTargetIndex
+                : undefined
+            }
             atBottomThreshold={100}
             increaseViewportBy={200}
             itemContent={renderItem}
