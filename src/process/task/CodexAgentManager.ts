@@ -152,6 +152,25 @@ class CodexAgentManager extends BaseAgentManager<CodexAgentManagerData> implemen
         onNetworkError: (error) => {
           this.handleNetworkError(error);
         },
+        onContextWindowExceeded: () => {
+          // Clear stored session ID so next attempt creates a fresh session
+          console.log(`[CodexAgentManager] ContextWindowExceeded — clearing session ID for fresh start`);
+          try {
+            const existing = getDatabase().getConversation(this.conversation_id);
+            if (existing.success && existing.data?.extra) {
+              const { codexNativeSessionId: _removed, ...restExtra } = existing.data.extra as Record<string, unknown>;
+              getDatabase().updateConversation(this.conversation_id, {
+                extra: restExtra,
+              } as never);
+            }
+            // Also report to orchestrator for poisoned session detection
+            const { getAutoCompactionOrchestrator } =
+              require('@process/services/autoCompaction') as typeof import('@process/services/autoCompaction');
+            getAutoCompactionOrchestrator().reportError(this.conversation_id, 'ContextWindowExceeded');
+          } catch {
+            // DB/orchestrator access failed — skip
+          }
+        },
         resumeSessionId: data.codexNativeSessionId,
         onSessionConfigured: (sessionId) => {
           // Persist native session ID back to conversation extra for resume
@@ -319,9 +338,26 @@ class CodexAgentManager extends BaseAgentManager<CodexAgentManagerData> implemen
         // autoCompaction not loaded yet — skip
       }
 
+      const errorMsg = e instanceof Error ? e.message : String(e);
+
+      // ContextWindowExceeded: clear stored session ID so next attempt creates a fresh session
+      if (errorMsg.includes('ContextWindowExceeded') || errorMsg.includes('context window')) {
+        console.log(`[CodexAgentManager] ContextWindowExceeded detected, clearing session for fresh start`);
+        try {
+          const existing = getDatabase().getConversation(this.conversation_id);
+          if (existing.success && existing.data?.extra) {
+            const { codexNativeSessionId: _removed, ...restExtra } = existing.data.extra as Record<string, unknown>;
+            getDatabase().updateConversation(this.conversation_id, {
+              extra: restExtra,
+            } as never);
+          }
+        } catch {
+          // DB access failed — skip
+        }
+      }
+
       // 对于某些错误类型，避免重复错误消息处理
       // 这些错误通常已经通过 MCP 连接的事件流处理过了
-      const errorMsg = e instanceof Error ? e.message : String(e);
       const isUsageLimitError = errorMsg.toLowerCase().includes("you've hit your usage limit");
 
       if (isUsageLimitError) {

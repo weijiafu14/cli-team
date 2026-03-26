@@ -37,6 +37,8 @@ export interface CodexAgentConfig {
   sessionManager: CodexSessionManager;
   fileOperationHandler: CodexFileOperationHandler;
   onNetworkError?: (error: NetworkError) => void;
+  /** Called when context window is exceeded — manager should clear the stored session ID */
+  onContextWindowExceeded?: () => void;
   sandboxMode?: 'read-only' | 'workspace-write' | 'danger-full-access'; // Filesystem sandbox mode
   /** Yolo mode: skip confirmation prompts while keeping sandbox protection (for cron jobs) */
   yoloMode?: boolean;
@@ -58,6 +60,7 @@ export class CodexAgent {
   private readonly sessionManager: CodexSessionManager;
   private readonly fileOperationHandler: CodexFileOperationHandler;
   private readonly onNetworkError?: (error: NetworkError) => void;
+  private readonly onContextWindowExceeded?: () => void;
   private readonly sandboxMode: 'read-only' | 'workspace-write' | 'danger-full-access';
   private readonly yoloMode: boolean;
   private readonly onSessionConfigured?: (sessionId: string) => void;
@@ -78,6 +81,7 @@ export class CodexAgent {
     this.sessionManager = cfg.sessionManager;
     this.fileOperationHandler = cfg.fileOperationHandler;
     this.onNetworkError = cfg.onNetworkError;
+    this.onContextWindowExceeded = cfg.onContextWindowExceeded;
     this.sandboxMode = cfg.sandboxMode || 'workspace-write'; // Default to workspace-write for file operations
     this.yoloMode = cfg.yoloMode || false;
     this.onSessionConfigured = cfg.onSessionConfigured;
@@ -343,6 +347,11 @@ export class CodexAgent {
       } else {
         // 其他错误类型统一处理
         this.eventHandler.getMessageProcessor().processStreamError(error.message);
+      }
+
+      // Detect ContextWindowExceeded to clear stored session and prevent re-resume
+      if (error.message.includes('ContextWindowExceeded') || error.message.includes('context window')) {
+        this.onContextWindowExceeded?.();
       }
     } catch {
       // Error handling failed, continue processing

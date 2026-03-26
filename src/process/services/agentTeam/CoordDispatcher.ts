@@ -7,6 +7,7 @@
 import { v4 as uuid } from 'uuid';
 import type { IAgentTeamMember } from '@/common/storage';
 import type { AgentTeamDispatchPolicy } from '@/common/storage';
+import { getDatabase } from '@process/database';
 import type { IWorkerTaskManager } from '@process/task/IWorkerTaskManager';
 import { CoordFileWatcher } from './CoordFileWatcher';
 import type { ICoordTimelineEntry } from './types';
@@ -343,6 +344,7 @@ export class CoordDispatcher {
         console.log(`[CoordDispatcher] Session poisoned for ${state.member.name}, resetting before dispatch`);
         // Interrupt the member to force a fresh session on next getOrBuildTask
         await this.interruptMembers([state.member.memberId]);
+        this.clearCodexAcpResumeStateIfNeeded(state.member);
         // Clear both poisoned state AND stale action closures so the new agent can re-register
         orchestrator.removeState(state.member.conversationId);
         orchestrator.clearPoisonedState(state.member.conversationId);
@@ -376,6 +378,33 @@ export class CoordDispatcher {
 
       state.busy = false;
       this.syncBusyPolling();
+    }
+  }
+
+  private clearCodexAcpResumeStateIfNeeded(member: IAgentTeamMember): void {
+    if (member.type !== 'acp' || member.backend !== 'codex') {
+      return;
+    }
+
+    try {
+      const result = getDatabase().getConversation(member.conversationId);
+      if (!result.success || !result.data || result.data.type !== 'acp') {
+        return;
+      }
+
+      const conversation = result.data;
+      const existingExtra = (conversation.extra || {}) as Record<string, unknown>;
+      const {
+        acpSessionId: _acpSessionId,
+        acpSessionUpdatedAt: _acpSessionUpdatedAt,
+        ...restExtra
+      } = existingExtra;
+
+      getDatabase().updateConversation(member.conversationId, {
+        extra: restExtra,
+      } as Partial<typeof conversation>);
+    } catch (err) {
+      console.warn(`[CoordDispatcher] Failed to clear codex ACP resume state for ${member.conversationId}:`, err);
     }
   }
 

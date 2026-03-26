@@ -284,6 +284,12 @@ export class CodexConnection {
             errorMsg.includes('unrecognized')
           ) {
             reject(new Error(`Invalid Codex CLI arguments. Error: ${errorMsg}`));
+          } else if (errorMsg.includes('ContextWindowExceeded') || errorMsg.includes('context window')) {
+            // Context window full — emit error so manager can detect and clear the session
+            this.onError({
+              type: 'stream',
+              message: `ContextWindowExceeded: ${errorMsg.trim()}`,
+            });
           }
         });
 

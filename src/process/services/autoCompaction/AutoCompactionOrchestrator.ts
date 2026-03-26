@@ -12,6 +12,8 @@ const SESSION_POISON_PATTERNS = [
   /exceeds the dimension limit/i,
   /many-image/i,
   /context window.*overflow/i,
+  /ContextWindowExceeded/i,
+  /ran out of room in the model.?s context window/i,
   /No capacity available/i,
   /model_capacity_exhausted/i,
 ];
