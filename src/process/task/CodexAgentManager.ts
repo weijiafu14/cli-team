@@ -24,6 +24,7 @@ import type { IResponseMessage } from '@/common/ipcBridge';
 import { uuid } from '@/common/utils';
 import { addMessage, addOrUpdateMessage } from '@process/message';
 import { cronBusyGuard } from '@process/services/cron/CronBusyGuard';
+import { getAutoCompactionOrchestrator } from '@process/services/autoCompaction';
 import { getDatabase } from '@process/database';
 import { ProcessConfig } from '@process/initStorage';
 import BaseAgentManager from '@process/task/BaseAgentManager';
@@ -164,8 +165,6 @@ class CodexAgentManager extends BaseAgentManager<CodexAgentManagerData> implemen
               } as never);
             }
             // Also report to orchestrator for poisoned session detection
-            const { getAutoCompactionOrchestrator } =
-              require('@process/services/autoCompaction') as typeof import('@process/services/autoCompaction');
             getAutoCompactionOrchestrator().reportError(this.conversation_id, 'ContextWindowExceeded');
           } catch {
             // DB/orchestrator access failed — skip
@@ -331,8 +330,6 @@ class CodexAgentManager extends BaseAgentManager<CodexAgentManagerData> implemen
       // Report error to AutoCompactionOrchestrator for session health tracking
       try {
         const errStr = e instanceof Error ? e.message : String(e);
-        const { getAutoCompactionOrchestrator } =
-          require('@process/services/autoCompaction') as typeof import('@process/services/autoCompaction');
         getAutoCompactionOrchestrator().reportError(this.conversation_id, errStr);
       } catch {
         // autoCompaction not loaded yet — skip
@@ -668,8 +665,6 @@ class CodexAgentManager extends BaseAgentManager<CodexAgentManagerData> implemen
       const used = tokenData?.info?.total_token_usage?.total_tokens ?? 0;
       const limit = tokenData?.info?.model_context_window ?? 0;
       if (used > 0 && limit > 0) {
-        const { getAutoCompactionOrchestrator } =
-          require('@process/services/autoCompaction') as typeof import('@process/services/autoCompaction');
         const orchestrator = getAutoCompactionOrchestrator();
 
         // Register per-conversation compact/rollover actions
