@@ -14,6 +14,22 @@ function isWindows() {
   return process.platform === 'win32';
 }
 
+function resolvePackagedAppOverride() {
+  const executableOverride = process.env.AIONUI_PACKAGED_EXECUTABLE;
+  if (!executableOverride) return null;
+
+  const executablePath = path.resolve(executableOverride);
+  if (!fs.existsSync(executablePath)) {
+    throw new Error(`[packaged-launch] AIONUI_PACKAGED_EXECUTABLE not found: ${executablePath}`);
+  }
+
+  const cwdOverride = process.env.AIONUI_PACKAGED_CWD;
+  return {
+    executablePath,
+    cwd: cwdOverride ? path.resolve(cwdOverride) : path.dirname(executablePath),
+  };
+}
+
 function killProcessByName(name) {
   return new Promise((resolve) => {
     const args = isWindows() ? ['/F', '/IM', name] : ['-f', name];
@@ -63,7 +79,7 @@ async function main() {
   const shouldClean = !flags.has('--no-clean');
   const passthroughArgs = values;
 
-  const packaged = resolvePackagedApp(projectRoot);
+  const packaged = resolvePackagedAppOverride() || resolvePackagedApp(projectRoot);
   if (!packaged) {
     console.error('[packaged-launch] No unpacked app found under out/. Run `just build-package` first.');
     process.exit(1);
