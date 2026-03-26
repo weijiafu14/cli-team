@@ -253,25 +253,19 @@ describe('AutoCompactionOrchestrator', () => {
     it('immediately poisons session on known poison patterns', () => {
       const isPoisoned = orchestrator.reportError(
         'conv-1',
-        'An image in the conversation exceeds the dimension limit for many-image requests',
+        'An image in the conversation exceeds the dimension limit for many-image requests'
       );
       expect(isPoisoned).toBe(true);
       expect(orchestrator.isSessionPoisoned('conv-1')).toBe(true);
     });
 
     it('detects capacity exhaustion pattern', () => {
-      const isPoisoned = orchestrator.reportError(
-        'conv-1',
-        'No capacity available for model gemini-3-flash-preview',
-      );
+      const isPoisoned = orchestrator.reportError('conv-1', 'No capacity available for model gemini-3-flash-preview');
       expect(isPoisoned).toBe(true);
     });
 
     it('detects context overflow pattern', () => {
-      const isPoisoned = orchestrator.reportError(
-        'conv-1',
-        'Context window will overflow with this request',
-      );
+      const isPoisoned = orchestrator.reportError('conv-1', 'Context window will overflow with this request');
       expect(isPoisoned).toBe(true);
     });
 
