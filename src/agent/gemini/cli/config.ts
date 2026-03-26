@@ -314,6 +314,7 @@ export async function loadCliConfig({
     listExtensions: argv.listExtensions || false,
     noBrowser: !!process.env.NO_BROWSER,
     summarizeToolOutput: settings.summarizeToolOutput,
+    shellToolInactivityTimeout: settings.shellToolInactivityTimeout,
     ideMode,
     // Enable native SkillManager for workspace-based skill discovery
     // Skills are symlinked into workspace .gemini/skills/ by setupAssistantWorkspace()
@@ -324,6 +325,8 @@ export async function loadCliConfig({
     // 这通常是由网络不稳定或代理问题导致的临时错误
     // This is usually a transient error caused by network instability or proxy issues
     retryFetchErrors: true,
+    // 透传 shell 工具无活动超时设置 / Pass through shell tool inactivity timeout setting
+    shellToolInactivityTimeout: settings.shellToolInactivityTimeout,
   });
 
   // FallbackModelHandler 返回类型在 aioncli-core v0.18.4 中使用 FallbackIntent
