@@ -298,7 +298,18 @@ export const useMessageLstCache = (key: string) => {
         if (cancelled || !messages || !Array.isArray(messages)) {
           return;
         }
-        const normalizedMessages = [...messages].toReversed();
+        // Reverse from DESC to chronological, then deduplicate by msg_id
+        // keeping the latest snapshot (last occurrence after reverse = most recent DB row)
+        const reversed = [...messages].toReversed();
+        const seenMsgIds = new Set<string>();
+        const normalizedMessages: typeof reversed = [];
+        for (let i = reversed.length - 1; i >= 0; i--) {
+          const m = reversed[i];
+          const msgId = m.msg_id;
+          if (msgId && seenMsgIds.has(msgId)) continue;
+          if (msgId) seenMsgIds.add(msgId);
+          normalizedMessages.unshift(m);
+        }
         // Merge DB messages with any real-time streaming messages already in the list.
         // This prevents a race condition where streaming messages (added via IPC before
         // the DB load completes) could cause DB-only messages to be lost.
