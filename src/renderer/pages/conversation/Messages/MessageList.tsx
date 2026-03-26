@@ -253,7 +253,6 @@ const MessageList: React.FC<{ className?: string; initialScrollTargetOnLoad?: 'b
     return 'LAST' as const;
   }, [initialScrollTargetOnLoad, processedList]);
 
-
   // Use auto-scroll hook
   const {
     virtuosoRef,
