@@ -52,7 +52,7 @@ describe('CoordDispatcher codex-over-acp poisoned recovery', () => {
       '/tmp/coord',
       [createMember()],
       {} as never,
-      'user-priority',
+      'user-priority'
     ) as DispatcherWithInternals;
 
     dispatcher.clearCodexAcpResumeStateIfNeeded(createMember());
@@ -64,7 +64,7 @@ describe('CoordDispatcher codex-over-acp poisoned recovery', () => {
           acpSessionId: expect.anything(),
           acpSessionUpdatedAt: expect.anything(),
         }),
-      }),
+      })
     );
   });
 
@@ -73,11 +73,11 @@ describe('CoordDispatcher codex-over-acp poisoned recovery', () => {
       '/tmp/coord',
       [createMember({ conversationId: 'conv-claude-acp', memberId: 'member-claude', backend: 'claude' })],
       {} as never,
-      'user-priority',
+      'user-priority'
     ) as DispatcherWithInternals;
 
     dispatcher.clearCodexAcpResumeStateIfNeeded(
-      createMember({ conversationId: 'conv-claude-acp', memberId: 'member-claude', backend: 'claude' }),
+      createMember({ conversationId: 'conv-claude-acp', memberId: 'member-claude', backend: 'claude' })
     );
 
     expect(mockGetConversation).not.toHaveBeenCalled();

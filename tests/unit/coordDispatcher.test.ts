@@ -1,9 +1,16 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { getAutoCompactionOrchestrator } from '../../src/process/services/autoCompaction';
+import { getAutoCompactionOrchestrator } from '@process/services/autoCompaction';
 
 const mockDbRefs = vi.hoisted(() => ({
   getConversation: vi.fn(),
   updateConversation: vi.fn(),
+}));
+
+const mockAutoCompactionRefs = vi.hoisted(() => ({
+  isSessionPoisoned: vi.fn(),
+  removeState: vi.fn(),
+  clearPoisonedState: vi.fn(),
+  reset: vi.fn(),
 }));
 
 vi.mock('@process/database', () => ({
@@ -11,6 +18,10 @@ vi.mock('@process/database', () => ({
     getConversation: mockDbRefs.getConversation,
     updateConversation: mockDbRefs.updateConversation,
   }),
+}));
+
+vi.mock('@process/services/autoCompaction', () => ({
+  getAutoCompactionOrchestrator: () => mockAutoCompactionRefs,
 }));
 
 import {
@@ -58,6 +69,7 @@ describe('buildCoordWakeupMessage', () => {
     expect(result).toContain('Scheduler notice only. Do not echo or quote it into chat or coord.');
     expect(result).toContain('Read now: python3 .agents/teams/afe7e031/coord/scripts/coord_read.py');
     expect(result).toContain('Write back via coord_write.py with --summary.');
+    expect(result).toContain("Write coord summary/body in the user's language");
     expect(result).not.toContain(
       'After reading unread coord messages, continue work and write back only through coord_write.py.'
     );
@@ -380,11 +392,17 @@ describe('CoordDispatcher interruptMembers', () => {
   beforeEach(() => {
     mockDbRefs.getConversation.mockReset();
     mockDbRefs.updateConversation.mockReset();
-    getAutoCompactionOrchestrator().reset();
+    mockAutoCompactionRefs.isSessionPoisoned.mockReset();
+    mockAutoCompactionRefs.removeState.mockReset();
+    mockAutoCompactionRefs.clearPoisonedState.mockReset();
+    mockAutoCompactionRefs.reset.mockReset();
   });
 
   afterEach(() => {
-    getAutoCompactionOrchestrator().reset();
+    mockAutoCompactionRefs.isSessionPoisoned.mockReset();
+    mockAutoCompactionRefs.removeState.mockReset();
+    mockAutoCompactionRefs.clearPoisonedState.mockReset();
+    mockAutoCompactionRefs.reset.mockReset();
   });
 
   it('kills and clears only the targeted member state', async () => {
@@ -487,12 +505,7 @@ describe('CoordDispatcher interruptMembers', () => {
       getTask: vi.fn(() => ({ stop })),
       kill: vi.fn(),
     } as unknown as IWorkerTaskManager;
-    const dispatcher = new CoordDispatcher(
-      '/tmp/coord',
-      [createMember()],
-      workerTaskManager,
-      'user-priority'
-    );
+    const dispatcher = new CoordDispatcher('/tmp/coord', [createMember()], workerTaskManager, 'user-priority');
 
     const interruptPromise = dispatcher.interruptMembers(['member-codex']);
 
@@ -505,7 +518,7 @@ describe('CoordDispatcher interruptMembers', () => {
     expect(workerTaskManager.kill).toHaveBeenCalledWith('conv-codex');
   });
 
-  it('clears persisted acpSessionId for poisoned Codex-over-ACP conversations before redispatch', async () => {
+  it('takes the poisoned-session redispatch path for Codex-over-ACP conversations', async () => {
     const sendMessage = vi.fn().mockResolvedValue(undefined);
     const workerTaskManager = {
       getTask: vi.fn(() => ({
@@ -539,12 +552,11 @@ describe('CoordDispatcher interruptMembers', () => {
         }),
       ],
       workerTaskManager,
-      'user-priority',
+      'user-priority'
     ) as DispatcherWithInternals;
 
-    const orchestrator = getAutoCompactionOrchestrator();
-    orchestrator.reportError('conv-codex', 'ContextWindowExceeded: old full thread');
-    expect(orchestrator.isSessionPoisoned('conv-codex')).toBe(true);
+    const orchestrator = getAutoCompactionOrchestrator() as unknown as typeof mockAutoCompactionRefs;
+    orchestrator.isSessionPoisoned.mockReturnValue(true);
 
     const codexState = dispatcher.memberStates.get('conv-codex');
     if (!codexState) {
@@ -557,7 +569,51 @@ describe('CoordDispatcher interruptMembers', () => {
         id: 'user-msg',
         topic: 'a0f736de',
         task_id: 'a0f736de',
-      }),
+      })
+    );
+
+    expect(workerTaskManager.kill).toHaveBeenCalledWith('conv-codex');
+    expect(sendMessage).toHaveBeenCalledWith(
+      expect.objectContaining({
+        internal: true,
+      })
+    );
+    expect(orchestrator.removeState).toHaveBeenCalledWith('conv-codex');
+    expect(orchestrator.clearPoisonedState).toHaveBeenCalledWith('conv-codex');
+  });
+
+  it('clears persisted acpSessionId for Codex-over-ACP conversations', () => {
+    mockDbRefs.getConversation.mockReturnValue({
+      success: true,
+      data: {
+        id: 'conv-codex',
+        type: 'acp',
+        extra: {
+          acpSessionId: 'poisoned-thread',
+          acpSessionUpdatedAt: 123,
+          foo: 'bar',
+        },
+      },
+    });
+
+    const dispatcher = new CoordDispatcher(
+      '/tmp/coord',
+      [
+        createMember({
+          backend: 'codex',
+          type: 'acp',
+        }),
+      ],
+      {} as unknown as IWorkerTaskManager,
+      'user-priority'
+    );
+
+    (dispatcher as any).clearCodexAcpResumeStateIfNeeded(
+      createMember({
+        conversationId: 'conv-codex',
+        backend: 'codex',
+        type: 'acp',
+      })
     );
 
     expect(mockDbRefs.updateConversation).toHaveBeenCalledWith(
@@ -566,10 +622,7 @@ describe('CoordDispatcher interruptMembers', () => {
         extra: {
           foo: 'bar',
         },
-      }),
+      })
     );
-    expect(workerTaskManager.kill).toHaveBeenCalledWith('conv-codex');
-    expect(sendMessage).toHaveBeenCalled();
-    expect(orchestrator.isSessionPoisoned('conv-codex')).toBe(false);
   });
 });
