@@ -55,6 +55,7 @@ export function useAutoScroll({
   const lastScrollTopRef = useRef(0);
   const previousListLengthRef = useRef(messages.length);
   const lastProgrammaticScrollTimeRef = useRef(0);
+  const hasScrolledInitialRef = useRef(false);
 
   // Scroll to bottom helper - only for user messages and button clicks
   const scrollToBottom = useCallback(
@@ -113,10 +114,19 @@ export function useAutoScroll({
     const prevLength = previousListLengthRef.current;
     const isNewMessage = currentListLength > prevLength;
     const isInitialLoad = initialScrollTargetIndex !== undefined && prevLength === 0 && currentListLength > 0;
+    // Handle first mount with preloaded messages (e.g., cached DB data available immediately)
+    const isFirstMountWithPreload =
+      initialScrollTargetIndex !== undefined &&
+      !hasScrolledInitialRef.current &&
+      currentListLength > 0;
 
     previousListLengthRef.current = currentListLength;
 
-    if (!isNewMessage) return;
+    if (!isNewMessage && !isFirstMountWithPreload) return;
+
+    if (isFirstMountWithPreload) {
+      hasScrolledInitialRef.current = true;
+    }
 
     const lastMessage = messages[messages.length - 1];
 
@@ -124,7 +134,7 @@ export function useAutoScroll({
     // Optionally enable the same behavior for the first DB-backed load in
     // child agent conversations, so opening the child room can jump to a more
     // meaningful initial target (e.g. latest right-side wakeup message).
-    if (lastMessage?.position === 'right' || isInitialLoad) {
+    if (lastMessage?.position === 'right' || isInitialLoad || isFirstMountWithPreload) {
       userScrolledRef.current = false;
       // Use double RAF to ensure DOM is updated before scrolling (#977)
       // 使用双 RAF 确保 DOM 更新后再滚动
@@ -133,7 +143,7 @@ export function useAutoScroll({
           if (virtuosoRef.current) {
             lastProgrammaticScrollTimeRef.current = Date.now();
             virtuosoRef.current.scrollToIndex({
-              index: isInitialLoad ? initialScrollTargetIndex! : 'LAST',
+              index: isInitialLoad || isFirstMountWithPreload ? initialScrollTargetIndex! : 'LAST',
               behavior: 'auto',
               align: 'end',
             });
